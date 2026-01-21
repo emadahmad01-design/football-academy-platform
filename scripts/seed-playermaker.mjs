@@ -4,7 +4,7 @@ import {
   playermakerSessions, 
   playermakerPlayerMetrics,
   players 
-} from './drizzle/schema.js';
+} from '../drizzle/schema.js';
 
 const db = drizzle(process.env.DATABASE_URL);
 

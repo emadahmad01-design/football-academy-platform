@@ -1,6 +1,6 @@
 // Script to fix PlayerMaker credentials using drizzle
-import { db } from './server/db';
-import { playermakerSettings } from './drizzle/schema';
+import { db } from '../server/db';
+import { playermakerSettings } from '../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 // Correct credentials from PlayerMaker
