@@ -302,12 +302,10 @@ export default function Home() {
                 </div>
               )}
               {isAuthenticated ? (
-                <Link href="/dashboard">
-                  <a className="inline-block">
-                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-                      {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
-                    </Button>
-                  </a>
+                <Link href="/dashboard" className="inline-block">
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                    {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+                  </Button>
                 </Link>
               ) : (
                 <a href={getLoginUrl()} className="inline-block">
@@ -424,12 +422,10 @@ export default function Home() {
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
             {isAuthenticated ? (
-              <Link href="/dashboard">
-                <a className="inline-block">
-                  <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8">
-                    {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
-                  </Button>
-                </a>
+              <Link href="/dashboard" className="inline-block">
+                <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8">
+                  {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
+                </Button>
               </Link>
             ) : (
               <a href={getLoginUrl()} className="inline-block">

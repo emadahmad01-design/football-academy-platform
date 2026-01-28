@@ -123,6 +123,7 @@ export const performanceMetrics = mysqlTable("performance_metrics", {
   technicalScore: int("technicalScore").default(0), // 0-100
   physicalScore: int("physicalScore").default(0), // 0-100
   tacticalScore: int("tacticalScore").default(0), // 0-100
+  mentalScore: int("mentalScore").default(0), // 0-100
   overallScore: int("overallScore").default(0), // 0-100
   notes: text("notes"),
   recordedBy: int("recordedBy").references(() => users.id),
@@ -1186,7 +1187,7 @@ export const trainingVideos = mysqlTable("training_videos", {
   titleAr: varchar("titleAr", { length: 200 }),
   description: text("description"),
   descriptionAr: text("descriptionAr"),
-  videoUrl: varchar("videoUrl", { length: 500 }).notNull(), // S3 URL
+  videoUrl: varchar("videoUrl", { length: 2000 }).notNull(), // S3 URL
   thumbnailUrl: varchar("thumbnailUrl", { length: 500 }), // Optional thumbnail
   duration: int("duration"), // Duration in seconds
   category: varchar("category", { length: 100 }).notNull(), // e.g., "ball_control", "passing", "shooting"

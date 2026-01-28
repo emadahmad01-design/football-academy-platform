@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
+import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Star, Calendar, Clock, MapPin, User, Award,
+  Star, Calendar, Clock, MapPin, User, Award,
   ChevronRight, CheckCircle2, Phone, MessageCircle
 } from 'lucide-react';
 
@@ -47,9 +48,9 @@ export default function PrivateTraining() {
     { enabled: !!selectedCoach }
   );
 
-  // Get parent's players
+  // Get parent's players or all players for admin
   const { data: myPlayers = [] } = trpc.players.getForParent.useQuery(undefined, {
-    enabled: !!user && user.role === 'parent',
+    enabled: !!user && (user.role === 'parent' || user.role === 'admin'),
   });
 
   // Book mutation
@@ -147,39 +148,15 @@ export default function PrivateTraining() {
   };
 
   return (
-    <div className={`min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 ${isRTL ? 'rtl' : 'ltr'}`}>
-      {/* Header */}
-      <header className="bg-navy-900 text-white sticky top-0 z-40">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="text-white hover:bg-navy-800"
-                onClick={() => window.history.back()}
-              >
-                <ArrowLeft className={`h-5 w-5 ${isRTL ? 'rotate-180' : ''}`} />
-              </Button>
-              <Link href="/">
-                <img src="/logo-transparent.png" alt="Future Stars FC" className="h-10" />
-              </Link>
-              <div className="flex items-center gap-2">
-                <User className="h-6 w-6 text-cyan-400" />
-                <h1 className="text-xl font-bold">{isRTL ? 'التدريب الخاص' : 'Private Training'}</h1>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container py-8">
-        {/* Hero Section */}
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white mb-4">
-            {isRTL ? 'احجز جلسة تدريب خاصة' : 'Book a Private Training Session'}
-          </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto">
+    <DashboardLayout>
+      <div className={`space-y-6 ${isRTL ? 'rtl' : 'ltr'}`}>
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <User className="h-8 w-8 text-cyan-500" />
+            {isRTL ? 'التدريب الخاص' : 'Private Training'}
+          </h1>
+          <p className="text-muted-foreground mt-1">
             {isRTL 
               ? 'اختر المدرب المناسب واحجز جلسة تدريب فردية لتطوير مهارات طفلك'
               : 'Choose the right coach and book a one-on-one training session to develop your child\'s skills'
@@ -224,7 +201,7 @@ export default function PrivateTraining() {
                 {coaches.map((coach: any) => (
                   <Card 
                     key={coach.id}
-                    className="bg-navy-800/50 border-navy-700 hover:border-cyan-500 transition-colors cursor-pointer"
+                    className="hover:border-cyan-500 transition-colors cursor-pointer"
                     onClick={() => setSelectedCoach(coach)}
                   >
                     <CardContent className="p-6">
@@ -242,7 +219,7 @@ export default function PrivateTraining() {
                         )}
                       </div>
                       
-                      <h4 className="text-lg font-semibold text-white text-center mb-2">
+                      <h4 className="text-lg font-semibold text-foreground text-center mb-2">
                         {coach.name || (isRTL ? 'مدرب' : 'Coach')}
                       </h4>
                       
@@ -254,19 +231,19 @@ export default function PrivateTraining() {
                       
                       <div className="flex items-center justify-center gap-2 mb-3">
                         {renderStars(coach.averageRating)}
-                        <span className="text-sm text-gray-400">
+                        <span className="text-sm text-muted-foreground">
                           ({coach.reviewCount} {isRTL ? 'تقييم' : 'reviews'})
                         </span>
                       </div>
                       
                       {coach.bio && (
-                        <p className="text-sm text-gray-400 text-center line-clamp-2 mb-4">
+                        <p className="text-sm text-muted-foreground text-center line-clamp-2 mb-4">
                           {coach.bio}
                         </p>
                       )}
                       
                       <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-1 text-gray-400">
+                        <div className="flex items-center gap-1 text-muted-foreground">
                           <Calendar className="h-4 w-4" />
                           <span>{coach.availableSlots} {isRTL ? 'موعد متاح' : 'slots'}</span>
                         </div>
@@ -282,17 +259,16 @@ export default function PrivateTraining() {
           /* Coach Details & Booking */
           <div className="space-y-6">
             <Button 
-              variant="ghost" 
-              className="text-gray-400 hover:text-white"
+              variant="ghost"
               onClick={() => setSelectedCoach(null)}
             >
-              <ArrowLeft className={`h-4 w-4 mr-2 ${isRTL ? 'rotate-180' : ''}`} />
+              <ChevronRight className={`h-4 w-4 mr-2 ${isRTL ? '' : 'rotate-180'}`} />
               {isRTL ? 'العودة للمدربين' : 'Back to Coaches'}
             </Button>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Coach Profile */}
-              <Card className="bg-navy-800/50 border-navy-700 lg:col-span-1">
+              <Card className="lg:col-span-1">
                 <CardContent className="p-6">
                   <div className="text-center mb-6">
                     {selectedCoach.photoUrl || selectedCoach.avatarUrl ? (
@@ -308,7 +284,7 @@ export default function PrivateTraining() {
                     )}
                   </div>
                   
-                  <h3 className="text-2xl font-bold text-white text-center mb-2">
+                  <h3 className="text-2xl font-bold text-foreground text-center mb-2">
                     {selectedCoach.name}
                   </h3>
                   
@@ -320,42 +296,42 @@ export default function PrivateTraining() {
                   
                   <div className="flex items-center justify-center gap-2 mb-4">
                     {renderStars(selectedCoach.averageRating)}
-                    <span className="text-gray-400">
+                    <span className="text-muted-foreground">
                       {selectedCoach.averageRating.toFixed(1)} ({selectedCoach.reviewCount})
                     </span>
                   </div>
                   
                   {selectedCoach.bio && (
-                    <p className="text-gray-300 text-center mb-4">
+                    <p className="text-foreground text-center mb-4">
                       {selectedCoach.bio}
                     </p>
                   )}
                   
                   {selectedCoach.qualifications && (
                     <div className="mb-4">
-                      <h4 className="font-semibold text-white mb-2 flex items-center gap-2">
+                      <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                         <Award className="h-4 w-4 text-yellow-400" />
                         {isRTL ? 'المؤهلات' : 'Qualifications'}
                       </h4>
-                      <p className="text-sm text-gray-400">{selectedCoach.qualifications}</p>
+                      <p className="text-sm text-muted-foreground">{selectedCoach.qualifications}</p>
                     </div>
                   )}
                   
                   {selectedCoach.experience && (
                     <div>
-                      <h4 className="font-semibold text-white mb-2">
+                      <h4 className="font-semibold text-foreground mb-2">
                         {isRTL ? 'الخبرة' : 'Experience'}
                       </h4>
-                      <p className="text-sm text-gray-400">{selectedCoach.experience}</p>
+                      <p className="text-sm text-muted-foreground">{selectedCoach.experience}</p>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               {/* Available Slots */}
-              <Card className="bg-navy-800/50 border-navy-700 lg:col-span-2">
+              <Card className="lg:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <Calendar className="h-5 w-5 text-cyan-400" />
                     {isRTL ? 'المواعيد المتاحة' : 'Available Time Slots'}
                   </CardTitle>
@@ -369,21 +345,21 @@ export default function PrivateTraining() {
                           className={`p-4 rounded-lg border transition-colors cursor-pointer ${
                             selectedSlot?.id === slot.id
                               ? 'bg-cyan-500/20 border-cyan-500'
-                              : 'bg-navy-700/50 border-navy-600 hover:border-cyan-500/50'
+                              : 'bg-muted hover:border-cyan-500/50'
                           }`}
                           onClick={() => setSelectedSlot(slot)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                               <div className="text-center">
-                                <div className="text-lg font-bold text-white">
+                                <div className="text-lg font-bold text-foreground">
                                   {isRTL ? DAYS_AR[slot.dayOfWeek] : DAYS[slot.dayOfWeek]}
                                 </div>
-                                <div className="text-sm text-gray-400">
+                                <div className="text-sm text-muted-foreground">
                                   {slot.isRecurring ? (isRTL ? 'أسبوعي' : 'Weekly') : (isRTL ? 'مرة واحدة' : 'One-time')}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 text-white">
+                              <div className="flex items-center gap-2 text-foreground">
                                 <Clock className="h-4 w-4 text-cyan-400" />
                                 <span>{slot.startTime} - {slot.endTime}</span>
                               </div>
@@ -413,8 +389,8 @@ export default function PrivateTraining() {
                     </div>
                   ) : (
                     <div className="text-center py-8">
-                      <Calendar className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                      <p className="text-gray-400">
+                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">
                         {isRTL 
                           ? 'لا توجد مواعيد متاحة حالياً'
                           : 'No available slots at the moment'
@@ -428,9 +404,9 @@ export default function PrivateTraining() {
 
             {/* Reviews Section */}
             {coachDetails?.reviews && coachDetails.reviews.length > 0 && (
-              <Card className="bg-navy-800/50 border-navy-700">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <Star className="h-5 w-5 text-yellow-400" />
                     {isRTL ? 'التقييمات' : 'Reviews'}
                   </CardTitle>
@@ -438,15 +414,15 @@ export default function PrivateTraining() {
                 <CardContent>
                   <div className="space-y-4">
                     {coachDetails.reviews.slice(0, 5).map((review: any) => (
-                      <div key={review.id} className="p-4 bg-navy-700/50 rounded-lg">
+                      <div key={review.id} className="p-4 bg-muted rounded-lg">
                         <div className="flex items-center gap-2 mb-2">
                           {renderStars(review.rating)}
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-muted-foreground">
                             {new Date(review.createdAt).toLocaleDateString()}
                           </span>
                         </div>
                         {review.comment && (
-                          <p className="text-gray-300">{review.comment}</p>
+                          <p className="text-foreground">{review.comment}</p>
                         )}
                       </div>
                     ))}
@@ -460,20 +436,21 @@ export default function PrivateTraining() {
 
       {/* Booking Modal */}
       <Dialog open={showBookingModal} onOpenChange={setShowBookingModal}>
-        <DialogContent className="bg-navy-800 border-navy-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{isRTL ? 'تأكيد الحجز' : 'Confirm Booking'}</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              {isRTL 
-                ? 'أكمل تفاصيل الحجز أدناه'
-                : 'Complete the booking details below'
-              }
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl">
+          <div className="max-h-[70vh] overflow-y-auto pr-2">
+            <DialogHeader>
+              <DialogTitle>{isRTL ? 'تأكيد الحجز' : 'Confirm Booking'}</DialogTitle>
+              <DialogDescription>
+                {isRTL 
+                  ? 'أكمل تفاصيل الحجز أدناه'
+                  : 'Complete the booking details below'
+                }
+              </DialogDescription>
+            </DialogHeader>
           
           <div className="space-y-6 mt-4">
             {/* Coach & Slot Summary */}
-              <div className="p-4 bg-navy-700/50 rounded-lg space-y-2">
+              <div className="p-4 bg-muted rounded-lg space-y-2">
                 <div className="flex items-center gap-3">
                   <User className="h-5 w-5 text-cyan-400" />
                   <span className="font-semibold">{selectedCoach?.name}</span>
@@ -485,7 +462,7 @@ export default function PrivateTraining() {
                       <span>{isRTL ? DAYS_AR[selectedSlot.dayOfWeek] : DAYS[selectedSlot.dayOfWeek]}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Clock className="h-4 w-4 text-gray-400" />
+                      <Clock className="h-4 w-4 text-muted-foreground" />
                       <span>{selectedSlot.startTime} - {selectedSlot.endTime}</span>
                     </div>
                   </>
@@ -496,15 +473,14 @@ export default function PrivateTraining() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">{isRTL ? 'اختر التاريخ' : 'Select Date'}</Label>
               <Select value={selectedDate} onValueChange={setSelectedDate}>
-                <SelectTrigger className="bg-navy-700 border-navy-600">
+                <SelectTrigger>
                   <SelectValue placeholder={isRTL ? 'اختر تاريخ' : 'Choose a date'} />
                 </SelectTrigger>
-                <SelectContent className="bg-navy-700 border-navy-600 z-[10001]">
+                <SelectContent>
                   {selectedSlot && getNextDates(selectedSlot.dayOfWeek).map((date) => (
                     <SelectItem 
                       key={date.toISOString()} 
                       value={date.toISOString().split('T')[0]}
-                      className="text-white hover:bg-navy-600"
                     >
                       {date.toLocaleDateString(isRTL ? 'ar-EG' : 'en-US', {
                         weekday: 'long',
@@ -523,15 +499,14 @@ export default function PrivateTraining() {
               <Label className="text-sm font-medium">{isRTL ? 'اختر اللاعب' : 'Select Player'}</Label>
               {myPlayers.length > 0 ? (
                 <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
-                  <SelectTrigger className="bg-navy-700 border-navy-600">
+                  <SelectTrigger>
                     <SelectValue placeholder={isRTL ? 'اختر لاعب' : 'Choose a player'} />
                   </SelectTrigger>
-                  <SelectContent className="bg-navy-700 border-navy-600 z-[10001]">
+                  <SelectContent>
                     {myPlayers.map((player: any) => (
                       <SelectItem 
                         key={player.id} 
                         value={player.id.toString()}
-                        className="text-white hover:bg-navy-600"
                       >
                         {player.firstName} {player.lastName}
                       </SelectItem>
@@ -539,7 +514,7 @@ export default function PrivateTraining() {
                   </SelectContent>
                 </Select>
               ) : (
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                   {isRTL 
                     ? 'لا يوجد لاعبين مسجلين. يرجى تسجيل لاعب أولاً.'
                     : 'No players registered. Please register a player first.'
@@ -555,12 +530,11 @@ export default function PrivateTraining() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={isRTL ? 'أي طلبات خاصة أو مجالات للتركيز عليها...' : 'Any special requests or focus areas...'}
-                className="bg-navy-700 border-navy-600"
               />
             </div>
 
             {/* Recurring Booking Option */}
-            <div className="p-4 bg-navy-700/50 rounded-lg space-y-4">
+            <div className="p-4 bg-muted rounded-lg space-y-4">
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -580,22 +554,21 @@ export default function PrivateTraining() {
                     {isRTL ? 'عدد الأسابيع' : 'Number of Weeks'}
                   </Label>
                   <Select value={recurringWeeks.toString()} onValueChange={(v) => setRecurringWeeks(parseInt(v))}>
-                    <SelectTrigger className="bg-navy-700 border-navy-600">
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-navy-700 border-navy-600 z-[10001]">
+                    <SelectContent>
                       {[2, 4, 6, 8, 10, 12].map((weeks) => (
                         <SelectItem 
                           key={weeks} 
                           value={weeks.toString()}
-                          className="text-white hover:bg-navy-600"
                         >
                           {weeks} {isRTL ? 'أسابيع' : 'weeks'}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     {isRTL 
                       ? `سيتم حجز ${recurringWeeks} جلسات في نفس الوقت كل أسبوع`
                       : `${recurringWeeks} sessions will be booked at the same time each week`
@@ -608,7 +581,7 @@ export default function PrivateTraining() {
             {/* Price */}
             {selectedSlot?.pricePerSession && (
               <div className="flex items-center justify-between p-4 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
-                <span className="text-gray-300">
+                <span className="text-muted-foreground">
                   {isRTL 
                     ? (isRecurring ? `السعر الإجمالي (${recurringWeeks} جلسات)` : 'السعر')
                     : (isRecurring ? `Total Price (${recurringWeeks} sessions)` : 'Price')
@@ -635,6 +608,7 @@ export default function PrivateTraining() {
               }
             </Button>
           </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -650,6 +624,6 @@ export default function PrivateTraining() {
           <span className="hidden md:inline">{isRTL ? 'تواصل معنا' : 'Contact Us'}</span>
         </a>
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

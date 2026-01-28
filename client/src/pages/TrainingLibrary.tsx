@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
+import DashboardLayout from '@/components/DashboardLayout';
 import VideoUploadModal from '@/components/VideoUploadModal';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
@@ -9,10 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Play, Clock, Target, Star, Search, Filter,
+  Play, Clock, Target, Star, Search, Filter,
   Dumbbell, Footprints, Crosshair, Zap, MapPin, Trophy,
   ChevronRight, CheckCircle2, Lock, Sparkles, X, Upload, Video, Eye
 } from 'lucide-react';
@@ -268,6 +269,7 @@ export default function TrainingLibrary() {
   const [completedDrills, setCompletedDrills] = useState<number[]>([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'drills' | 'videos'>('drills');
+  const [selectedTrainingVideo, setSelectedTrainingVideo] = useState<any | null>(null);
   const videoRef = useRef<HTMLIFrameElement>(null);
 
   // Check if user is coach or admin
@@ -318,49 +320,42 @@ export default function TrainingLibrary() {
     return category?.color || 'bg-gray-500';
   };
 
-  return (
-    <div className={`min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 ${isRTL ? 'rtl' : 'ltr'}`}>
-      {/* Header */}
-      <header className="bg-navy-900 text-white sticky top-0 z-40">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="text-white hover:bg-navy-800"
-                onClick={() => window.history.back()}
-              >
-                <ArrowLeft className={`h-5 w-5 ${isRTL ? 'rotate-180' : ''}`} />
-              </Button>
-              <Link href="/">
-                <img src="/logo-transparent.png" alt="Future Stars FC" className="h-10" />
-              </Link>
-              <div className="flex items-center gap-2">
-                <Dumbbell className="h-6 w-6 text-cyan-400" />
-                <h1 className="text-xl font-bold">{isRTL ? 'مكتبة التمارين' : 'Training Library'}</h1>
-              </div>
-            </div>
-            {isStaff && (
-              <Button
-                onClick={() => setShowUploadModal(true)}
-                className="bg-cyan-600 hover:bg-cyan-700"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {isRTL ? 'رفع فيديو' : 'Upload Video'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+  const isDirectTrainingVideo = (url?: string) => {
+    if (!url) return false;
+    return /\.(mp4|webm|ogg)(\?|$)/i.test(url);
+  };
 
-      {/* Tabs for Drills vs Videos */}
-      <div className="container pt-4">
-        <div className="flex gap-2">
+  return (
+    <DashboardLayout>
+      <div className={`space-y-6 ${isRTL ? 'rtl' : 'ltr'}`}>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Dumbbell className="h-8 w-8 text-cyan-500" />
+              {isRTL ? 'مكتبة التمارين' : 'Training Library'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {isRTL ? 'تصفح ومارس التمارين الاحترافية' : 'Browse and practice professional training drills'}
+            </p>
+          </div>
+          {isStaff && (
+            <Button
+              onClick={() => setShowUploadModal(true)}
+              className="bg-cyan-600 hover:bg-cyan-700"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {isRTL ? 'رفع فيديو' : 'Upload Video'}
+              </Button>
+          )}
+        </div>
+
+        {/* Tabs for Drills vs Videos */}
+        <div className="flex gap-2 mb-6">
           <Button
             variant={activeTab === 'drills' ? 'default' : 'outline'}
             onClick={() => setActiveTab('drills')}
-            className={activeTab === 'drills' ? 'bg-cyan-600' : 'border-navy-600 text-gray-300'}
+            className={activeTab === 'drills' ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
           >
             <Dumbbell className="h-4 w-4 mr-2" />
             {isRTL ? 'التمارين' : 'Drills'}
@@ -368,7 +363,7 @@ export default function TrainingLibrary() {
           <Button
             variant={activeTab === 'videos' ? 'default' : 'outline'}
             onClick={() => setActiveTab('videos')}
-            className={activeTab === 'videos' ? 'bg-cyan-600' : 'border-navy-600 text-gray-300'}
+            className={activeTab === 'videos' ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
           >
             <Video className="h-4 w-4 mr-2" />
             {isRTL ? 'فيديوهات تدريبية' : 'Training Videos'}
@@ -377,21 +372,20 @@ export default function TrainingLibrary() {
             )}
           </Button>
         </div>
-      </div>
 
       {activeTab === 'drills' && (
-      <div className="container py-6 space-y-6">
+      <div className="space-y-6">
         {/* Search and Filter */}
-        <Card className="bg-navy-800/50 border-navy-700">
+        <Card>
           <CardContent className="p-4">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder={isRTL ? 'ابحث عن تمرين...' : 'Search drills...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-navy-700 border-navy-600 text-white"
+                  className="pl-10"
                 />
               </div>
               <div className="flex gap-2 overflow-x-auto pb-2">
@@ -406,7 +400,7 @@ export default function TrainingLibrary() {
                       className={`whitespace-nowrap ${
                         selectedCategory === category.id 
                           ? `${category.color} text-white` 
-                          : 'border-navy-600 text-gray-300 hover:bg-navy-700'
+                          : ''
                       }`}
                     >
                       <Icon className="h-4 w-4 mr-1" />
@@ -421,12 +415,12 @@ export default function TrainingLibrary() {
 
         {/* Recommended For You Section */}
         {recommendedDrills.length > 0 && selectedCategory === 'all' && (
-          <Card className="bg-gradient-to-r from-cyan-900/50 to-blue-900/50 border-cyan-700">
+          <Card className="bg-gradient-to-r from-cyan-900/20 to-blue-900/20">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-yellow-400" />
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-yellow-500" />
                 {isRTL ? 'موصى به لك' : 'Recommended For You'}
-                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500">
+                <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-600 border-yellow-500">
                   {isRTL ? 'بناءً على تحليل الفيديو' : 'Based on Video Analysis'}
                 </Badge>
               </CardTitle>
@@ -436,7 +430,7 @@ export default function TrainingLibrary() {
                 {recommendedDrills.map(({ drill, reason, reasonAr }) => (
                   <Card 
                     key={drill.id} 
-                    className="bg-navy-800/80 border-cyan-600 cursor-pointer hover:border-cyan-400 transition-colors"
+                    className="cursor-pointer hover:shadow-lg transition-shadow"
                     onClick={() => setSelectedDrill(drill)}
                   >
                     <CardContent className="p-4">
@@ -444,21 +438,21 @@ export default function TrainingLibrary() {
                         <div className={`p-2 rounded-lg ${getCategoryColor(drill.category)}`}>
                           {(() => {
                             const Icon = getCategoryIcon(drill.category);
-                            return <Icon className="h-5 w-5 text-white" />;
+                            return <Icon className="h-5 w-5" />;
                           })()}
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-semibold text-white">
+                          <h4 className="font-semibold">
                             {isRTL ? drill.titleAr : drill.title}
                           </h4>
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-muted-foreground mt-1">
                             {isRTL ? reasonAr : reason}
                           </p>
                           <div className="flex items-center gap-2 mt-2">
-                            <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">
+                            <Badge className="bg-cyan-500/20 text-cyan-600 text-xs">
                               +{drill.pointsReward} {isRTL ? 'نقطة' : 'pts'}
                             </Badge>
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-muted-foreground">
                               <Clock className="h-3 w-3 inline mr-1" />
                               {drill.duration} {isRTL ? 'دقيقة' : 'min'}
                             </span>
@@ -483,16 +477,16 @@ export default function TrainingLibrary() {
             return (
               <Card 
                 key={drill.id} 
-                className={`bg-navy-800/50 border-navy-700 cursor-pointer hover:border-cyan-500 transition-all group ${
+                className={`cursor-pointer hover:shadow-lg transition-all group ${
                   isCompleted ? 'ring-2 ring-green-500/50' : ''
                 }`}
                 onClick={() => setSelectedDrill(drill)}
               >
                 <div className="relative">
                   {/* Thumbnail */}
-                  <div className="aspect-video bg-navy-700 rounded-t-lg overflow-hidden relative">
-                    <div className="absolute inset-0 flex items-center justify-center bg-navy-800/80">
-                      <Icon className="h-12 w-12 text-gray-600" />
+                  <div className="aspect-video bg-muted rounded-t-lg overflow-hidden relative">
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+                      <Icon className="h-12 w-12 text-muted-foreground" />
                     </div>
                     {/* Play overlay */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50">
@@ -514,14 +508,14 @@ export default function TrainingLibrary() {
                 </div>
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-white line-clamp-2">
+                    <h3 className="font-semibold line-clamp-2">
                       {isRTL ? drill.titleAr : drill.title}
                     </h3>
                     <Badge className={`${difficultyInfo.color} text-white text-xs shrink-0`}>
                       {isRTL ? difficultyInfo.ar : difficultyInfo.en}
                     </Badge>
                   </div>
-                  <p className="text-sm text-gray-400 mt-2 line-clamp-2">
+                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
                     {isRTL ? drill.descriptionAr : drill.description}
                   </p>
                   <div className="flex items-center justify-between mt-3">
@@ -534,12 +528,12 @@ export default function TrainingLibrary() {
                         }
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-1 text-yellow-400">
+                    <div className="flex items-center gap-1 text-yellow-500">
                       <Star className="h-3 w-3 fill-current" />
                       <span className="text-xs">{drill.avgRating}%</span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+                  <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
                     <span>+{drill.pointsReward} {isRTL ? 'نقطة' : 'points'}</span>
                     <span>{drill.completionCount.toLocaleString()} {isRTL ? 'إكمال' : 'completed'}</span>
                   </div>
@@ -550,13 +544,13 @@ export default function TrainingLibrary() {
         </div>
 
         {filteredDrills.length === 0 && (
-          <Card className="bg-navy-800/50 border-navy-700">
+          <Card>
             <CardContent className="p-12 text-center">
-              <Dumbbell className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">
+              <Dumbbell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">
                 {isRTL ? 'لا توجد تمارين' : 'No drills found'}
               </h3>
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 {isRTL 
                   ? 'جرب تغيير الفئة أو البحث بكلمات مختلفة' 
                   : 'Try changing the category or search with different keywords'
@@ -570,7 +564,7 @@ export default function TrainingLibrary() {
 
       {/* Drill Detail Modal */}
       <Dialog open={!!selectedDrill} onOpenChange={() => setSelectedDrill(null)}>
-        <DialogContent className="bg-navy-800 border-navy-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedDrill && (
             <>
               <DialogHeader>
@@ -604,14 +598,14 @@ export default function TrainingLibrary() {
                     </Button>
                   </div>
                 ) : (
-                  <div 
-                    className="aspect-video bg-navy-700 rounded-lg overflow-hidden relative cursor-pointer group"
+                  <div
+                    className="aspect-video bg-muted rounded-lg overflow-hidden relative cursor-pointer group"
                     onClick={() => setShowVideo(true)}
                   >
                     <div className="absolute inset-0 flex items-center justify-center">
                       {(() => {
                         const Icon = getCategoryIcon(selectedDrill.category);
-                        return <Icon className="h-16 w-16 text-gray-600" />;
+                        return <Icon className="h-16 w-16 text-muted-foreground" />;
                       })()}
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
@@ -624,27 +618,27 @@ export default function TrainingLibrary() {
 
                 {/* Drill Info */}
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-navy-700/50 rounded-lg p-3 text-center">
-                    <Clock className="h-5 w-5 text-cyan-400 mx-auto mb-1" />
+                  <div className="bg-muted/50 rounded-lg p-3 text-center">
+                    <Clock className="h-5 w-5 text-cyan-500 mx-auto mb-1" />
                     <div className="text-lg font-bold">{selectedDrill.duration}</div>
-                    <div className="text-xs text-gray-400">{isRTL ? 'دقيقة' : 'minutes'}</div>
+                    <div className="text-xs text-muted-foreground">{isRTL ? 'دقيقة' : 'minutes'}</div>
                   </div>
-                  <div className="bg-navy-700/50 rounded-lg p-3 text-center">
-                    <Trophy className="h-5 w-5 text-yellow-400 mx-auto mb-1" />
+                  <div className="bg-muted/50 rounded-lg p-3 text-center">
+                    <Trophy className="h-5 w-5 text-yellow-500 mx-auto mb-1" />
                     <div className="text-lg font-bold">+{selectedDrill.pointsReward}</div>
-                    <div className="text-xs text-gray-400">{isRTL ? 'نقطة' : 'points'}</div>
+                    <div className="text-xs text-muted-foreground">{isRTL ? 'نقطة' : 'points'}</div>
                   </div>
-                  <div className="bg-navy-700/50 rounded-lg p-3 text-center">
-                    <Star className="h-5 w-5 text-orange-400 mx-auto mb-1" />
+                  <div className="bg-muted/50 rounded-lg p-3 text-center">
+                    <Star className="h-5 w-5 text-orange-500 mx-auto mb-1" />
                     <div className="text-lg font-bold">{selectedDrill.avgRating}%</div>
-                    <div className="text-xs text-gray-400">{isRTL ? 'تقييم' : 'rating'}</div>
+                    <div className="text-xs text-muted-foreground">{isRTL ? 'تقييم' : 'rating'}</div>
                   </div>
                 </div>
 
                 {/* Description */}
                 <div>
                   <h4 className="font-semibold mb-2">{isRTL ? 'الوصف' : 'Description'}</h4>
-                  <p className="text-gray-300">
+                  <p className="text-muted-foreground">
                     {isRTL ? selectedDrill.descriptionAr : selectedDrill.description}
                   </p>
                 </div>
@@ -721,14 +715,14 @@ export default function TrainingLibrary() {
 
       {/* Training Videos Section (shown when videos tab is active) */}
       {activeTab === 'videos' && (
-        <div className="container pb-6">
+        <div className="pb-6">
           {trainingVideos.length === 0 ? (
-            <Card className="bg-navy-800/50 border-navy-700 p-8 text-center">
-              <Video className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">
+            <Card className="p-8 text-center">
+              <Video className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">
                 {isRTL ? 'لا توجد فيديوهات بعد' : 'No Videos Yet'}
               </h3>
-              <p className="text-gray-400 mb-4">
+              <p className="text-muted-foreground mb-4">
                 {isRTL 
                   ? 'سيتم إضافة فيديوهات تدريبية قريباً'
                   : 'Training videos will be added soon'
@@ -744,20 +738,27 @@ export default function TrainingLibrary() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {trainingVideos.map((video) => (
-                <Card key={video.id} className="bg-navy-800/50 border-navy-700 overflow-hidden hover:border-cyan-500 transition-colors cursor-pointer">
-                  <div className="relative aspect-video bg-navy-900">
+                <Card
+                  key={video.id}
+                  className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => setSelectedTrainingVideo(video)}
+                >
+                  <div className="relative aspect-video bg-muted">
                     {video.thumbnailUrl ? (
                       <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Video className="h-16 w-16 text-gray-600" />
+                        <Video className="h-16 w-16 text-muted-foreground" />
                       </div>
                     )}
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                       <Button
                         size="lg"
                         className="bg-cyan-600 hover:bg-cyan-700 rounded-full h-16 w-16"
-                        onClick={() => window.open(video.videoUrl, '_blank')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTrainingVideo(video);
+                        }}
                       >
                         <Play className="h-8 w-8" />
                       </Button>
@@ -769,30 +770,30 @@ export default function TrainingLibrary() {
                     )}
                   </div>
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-white mb-1">
+                    <h3 className="font-semibold mb-1">
                       {isRTL && video.titleAr ? video.titleAr : video.title}
                     </h3>
-                    <p className="text-sm text-gray-400 line-clamp-2 mb-3">
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
                       {isRTL && video.descriptionAr ? video.descriptionAr : video.description}
                     </p>
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <Badge className={`${
-                          video.difficulty === 'beginner' ? 'bg-green-500/20 text-green-400' :
-                          video.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-orange-500/20 text-orange-400'
+                          video.difficulty === 'beginner' ? 'bg-green-500/20 text-green-600' :
+                          video.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-600' :
+                          'bg-orange-500/20 text-orange-600'
                         }`}>
                           {video.difficulty === 'beginner' ? (isRTL ? 'مبتدئ' : 'Beginner') :
                            video.difficulty === 'intermediate' ? (isRTL ? 'متوسط' : 'Intermediate') :
                            (isRTL ? 'متقدم' : 'Advanced')}
                         </Badge>
                         {video.ageGroup && video.ageGroup !== 'all' && (
-                          <Badge variant="outline" className="border-gray-600 text-gray-400">
+                          <Badge variant="outline">
                             {video.ageGroup}
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 text-gray-400">
+                      <div className="flex items-center gap-1 text-muted-foreground">
                         <Eye className="h-4 w-4" />
                         <span>{video.viewCount || 0}</span>
                       </div>
@@ -804,6 +805,46 @@ export default function TrainingLibrary() {
           )}
         </div>
       )}
-    </div>
+
+      <Dialog
+        open={!!selectedTrainingVideo}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTrainingVideo(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              {isRTL && selectedTrainingVideo?.titleAr
+                ? selectedTrainingVideo.titleAr
+                : selectedTrainingVideo?.title}
+            </DialogTitle>
+            <DialogDescription>
+              {isRTL && selectedTrainingVideo?.descriptionAr
+                ? selectedTrainingVideo.descriptionAr
+                : selectedTrainingVideo?.description || (isRTL ? 'شاهد الفيديو التدريبي' : 'Watch the training video')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="aspect-video bg-black rounded-lg overflow-hidden">
+            {isDirectTrainingVideo(selectedTrainingVideo?.videoUrl) ? (
+              <video
+                className="w-full h-full"
+                controls
+                src={selectedTrainingVideo?.videoUrl}
+              />
+            ) : (
+              <iframe
+                className="w-full h-full"
+                src={selectedTrainingVideo?.videoUrl}
+                title={selectedTrainingVideo?.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      </div>
+    </DashboardLayout>
   );
 }

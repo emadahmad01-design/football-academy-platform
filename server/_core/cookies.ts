@@ -39,10 +39,15 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  const isSecure = isSecureRequest(req);
+  const isDev = process.env.NODE_ENV !== "production";
+
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    // In development, use "lax" for easier cookie handling on localhost
+    // In production with HTTPS, use "none" for cross-site requests
+    sameSite: isDev ? "lax" : "none",
+    secure: isSecure,
   };
 }

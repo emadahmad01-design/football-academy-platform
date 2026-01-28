@@ -7,9 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -26,69 +25,118 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Clock, Plus, Calendar, Loader2, Trash2 } from "lucide-react";
+import { Clock, Plus, Calendar, Loader2, Trash2, Users } from "lucide-react";
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAYS_OF_WEEK_AR = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const TIME_SLOTS = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00', '22:00'];
-const SESSION_TYPES = [{ value: 'all', label: 'All Types', labelAr: 'جميع الأنواع' }, { value: 'training', label: 'Training Only', labelAr: 'التدريب فقط' }, { value: 'private', label: 'Private Sessions', labelAr: 'جلسات خاصة' }];
 
 export default function CoachAvailabilityManagement() {
   const { user, loading: authLoading } = useAuth();
   const { language } = useLanguage();
   const isRTL = language === 'ar';
+  const isAdmin = user?.role === 'admin';
 
+  const [selectedCoachId, setSelectedCoachId] = useState<number | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    pricePerSession: number;
+    isAvailable: boolean;
+  }>({
     dayOfWeek: 0,
     startTime: '09:00',
     endTime: '17:00',
-    sessionType: 'all',
+    pricePerSession: 200,
     isAvailable: true,
-    notes: '',
   });
 
   const utils = trpc.useUtils();
-  const { data: availability, isLoading } = trpc.coachAvailability.getAll.useQuery();
+  const { data: coaches, isLoading: coachesLoading } = trpc.privateTraining.getCoaches.useQuery(undefined, { enabled: isAdmin });
+  
+  // Get schedule slots for the selected coach (admin) or current user (coach)
+  const targetCoachId = isAdmin && selectedCoachId ? selectedCoachId : user?.id;
+  const { data: slotsFromCoach, isLoading: slotsLoadingCoach } = trpc.privateTraining.getMySlots.useQuery(undefined, {
+    enabled: !isAdmin && !!user?.id
+  });
+  const { data: slotsFromAdmin, isLoading: slotsLoadingAdmin } = trpc.privateTraining.getCoachSlotsAdmin.useQuery(
+    { coachId: selectedCoachId! },
+    { enabled: isAdmin && !!selectedCoachId }
+  );
+  
+  const slots = isAdmin ? slotsFromAdmin : slotsFromCoach;
+  const slotsLoading = isAdmin ? slotsLoadingAdmin : slotsLoadingCoach;
 
-  const setAvailability = trpc.coachAvailability.set.useMutation({
-    onSuccess: () => {
-      toast.success(isRTL ? 'تم حفظ التوفر بنجاح' : 'Availability saved successfully');
-      utils.coachAvailability.getAll.invalidate();
+  const addSlot = trpc.privateTraining.addSlot.useMutation({
+    onSuccess: async () => {
+      toast.success(isRTL ? 'تم إضافة الموعد بنجاح' : 'Slot added successfully');
+      await utils.privateTraining.getMySlots.refetch();
       setIsDialogOpen(false);
       resetForm();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error: any) => toast.error(error.message),
   });
 
-  const deleteAvailability = trpc.coachAvailability.delete.useMutation({
-    onSuccess: () => {
-      toast.success(isRTL ? 'تم حذف التوفر' : 'Availability deleted');
-      utils.coachAvailability.getAll.invalidate();
+  const addSlotForCoach = trpc.privateTraining.addSlotForCoach.useMutation({
+    onSuccess: async () => {
+      toast.success(isRTL ? 'تم إضافة الموعد بنجاح' : 'Slot added successfully');
+      await utils.privateTraining.getCoachSlotsAdmin.refetch();
+      setIsDialogOpen(false);
+      resetForm();
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error: any) => toast.error(error.message),
+  });
+
+  const deleteSlot = trpc.privateTraining.deleteSlot.useMutation({
+    onSuccess: async () => {
+      toast.success(isRTL ? 'تم حذف الموعد' : 'Slot deleted');
+      if (isAdmin) {
+        await utils.privateTraining.getCoachSlotsAdmin.refetch();
+      } else {
+        await utils.privateTraining.getMySlots.refetch();
+      }
+    },
+    onError: (error: any) => toast.error(error.message),
   });
 
   const resetForm = () => {
-    setFormData({ dayOfWeek: 0, startTime: '09:00', endTime: '17:00', sessionType: 'all', isAvailable: true, notes: '' });
+    setFormData({ dayOfWeek: 0, startTime: '09:00', endTime: '17:00', pricePerSession: 200, isAvailable: true });
   };
 
   const handleSave = () => {
-    setAvailability.mutate(formData);
-  };
-
-  const handleDelete = (id: number) => {
-    if (confirm(isRTL ? 'هل أنت متأكد من الحذف؟' : 'Are you sure you want to delete this?')) {
-      deleteAvailability.mutate({ id });
+    if (isAdmin && selectedCoachId) {
+      addSlotForCoach.mutate({
+        coachId: selectedCoachId,
+        dayOfWeek: formData.dayOfWeek,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        pricePerSession: formData.pricePerSession,
+      });
+    } else if (!isAdmin) {
+      addSlot.mutate({
+        dayOfWeek: formData.dayOfWeek,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        pricePerSession: formData.pricePerSession,
+      });
+    } else {
+      toast.error(isRTL ? 'اختر مدربًا' : 'Please select a coach');
     }
   };
 
-  const myAvailability = availability?.filter(a => a.coachId === user?.id) || [];
+  const handleDelete = (slotId: number) => {
+    if (confirm(isRTL ? 'هل أنت متأكد من الحذف؟' : 'Are you sure you want to delete this slot?')) {
+      deleteSlot.mutate({ slotId });
+    }
+  };
+
   const groupedByDay = DAYS_OF_WEEK.map((day, index) => ({
     day,
     dayAr: DAYS_OF_WEEK_AR[index],
     dayIndex: index,
-    slots: myAvailability.filter(a => a.dayOfWeek === index),
+    slots: (slots || []).filter((s: any) => s.dayOfWeek === index),
   }));
 
   if (authLoading) return <DashboardLayoutSkeleton />;
@@ -103,16 +151,42 @@ export default function CoachAvailabilityManagement() {
               {isRTL ? 'إدارة التوفر' : 'Availability Management'}
             </h1>
             <p className="text-muted-foreground mt-1">
-              {isRTL ? 'حدد أوقات توفرك للتدريب' : 'Set your availability for training sessions'}
+              {isRTL ? (isAdmin ? 'إدارة أوقات توفر المدربين' : 'حدد أوقات توفرك للتدريب') : (isAdmin ? 'Manage coach availability schedules' : 'Set your availability for training sessions')}
             </p>
           </div>
-          <Button onClick={() => setIsDialogOpen(true)} className="gap-2">
+          <Button onClick={() => setIsDialogOpen(true)} className="gap-2" disabled={isAdmin && !selectedCoachId}>
             <Plus className="w-4 h-4" />
             {isRTL ? 'إضافة توفر' : 'Add Availability'}
           </Button>
         </div>
 
-        {isLoading ? (
+        {/* Coach Selection for Admins */}
+        {isAdmin && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                {isRTL ? 'اختر المدرب' : 'Select Coach'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedCoachId?.toString() || ''} onValueChange={(v) => setSelectedCoachId(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder={isRTL ? 'اختر مدربًا' : 'Select a coach'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {coaches?.map((coach) => (
+                    <SelectItem key={coach.userId} value={coach.userId.toString()}>
+                      {coach.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
+
+        {slotsLoading ? (
           <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 animate-spin" /></div>
         ) : (
           <div className="space-y-4">
@@ -135,10 +209,11 @@ export default function CoachAvailabilityManagement() {
                             <Badge variant={slot.isAvailable ? 'default' : 'secondary'}>
                               {slot.startTime} - {slot.endTime}
                             </Badge>
-                            <Badge variant="outline">
-                              {SESSION_TYPES.find(t => t.value === slot.sessionType)?.[isRTL ? 'labelAr' : 'label']}
-                            </Badge>
-                            {slot.notes && <span className="text-sm text-muted-foreground">{slot.notes}</span>}
+                            {slot.pricePerSession && (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                {slot.pricePerSession} {isRTL ? 'ج.م' : 'EGP'}
+                              </Badge>
+                            )}
                           </div>
                           <Button variant="ghost" size="sm" onClick={() => handleDelete(slot.id)}>
                             <Trash2 className="w-4 h-4 text-destructive" />
@@ -196,30 +271,20 @@ export default function CoachAvailabilityManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label>{isRTL ? 'نوع الجلسة' : 'Session Type'}</Label>
-                <Select value={formData.sessionType} onValueChange={(v) => setFormData({ ...formData, sessionType: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SESSION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{isRTL ? t.labelAr : t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label>{isRTL ? 'متاح' : 'Available'}</Label>
-                <Switch checked={formData.isAvailable} onCheckedChange={(c) => setFormData({ ...formData, isAvailable: c })} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>{isRTL ? 'ملاحظات' : 'Notes'}</Label>
-                <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder={isRTL ? 'ملاحظات اختيارية...' : 'Optional notes...'} rows={2} />
+                <Label>{isRTL ? 'السعر (ج.م)' : 'Price (EGP)'}</Label>
+                <Input
+                  type="number"
+                  value={formData.pricePerSession}
+                  onChange={(e) => setFormData({ ...formData, pricePerSession: parseInt(e.target.value) || 0 })}
+                  placeholder="200"
+                />
               </div>
             </div>
             
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>{isRTL ? 'إلغاء' : 'Cancel'}</Button>
-              <Button onClick={handleSave} disabled={setAvailability.isPending}>
-                {setAvailability.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              <Button onClick={handleSave} disabled={addSlot.isPending || addSlotForCoach.isPending}>
+                {(addSlot.isPending || addSlotForCoach.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {isRTL ? 'إضافة' : 'Add'}
               </Button>
             </DialogFooter>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
+import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,7 @@ export default function LiveMatchMode() {
   const [showGpsDialog, setShowGpsDialog] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string>('');
   const [loadingAdvice, setLoadingAdvice] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<{ id: number; firstName: string; lastName: string } | null>(null);
 
   // Form states
   const [startForm, setStartForm] = useState({
@@ -214,7 +216,7 @@ export default function LiveMatchMode() {
 
   if (!liveMatchId) {
     return (
-      <div className="container mx-auto py-8">
+      <DashboardLayout>
         <div className="max-w-2xl mx-auto">
           <Card className="p-8">
             <div className="text-center mb-8">
@@ -307,15 +309,16 @@ export default function LiveMatchMode() {
             </Dialog>
           </Card>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   const match = matchState?.match;
-  if (!match) return <div className="container mx-auto py-8 text-center">{t('loading')}</div>;
+  if (!match) return <DashboardLayout><div className="container mx-auto py-8 text-center">{t('loading')}</div></DashboardLayout>;
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <DashboardLayout>
+      <div className="space-y-6">
       {/* Header with Timer and Score */}
       <Card className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
@@ -776,6 +779,7 @@ export default function LiveMatchMode() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

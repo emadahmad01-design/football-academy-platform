@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/_core/hooks/useAuth';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,13 +30,32 @@ const roleLabels: Record<string, { en: string; ar: string }> = {
 
 export function TeamSwitcher({ currentTeamType, onTeamChange }: TeamSwitcherProps) {
   const { language } = useLanguage();
+  const { user } = useAuth();
   const [, navigate] = useLocation();
   
-  // Get the coach's assigned teams
+  // Get the coach's assigned teams or all teams for admins
   const { data: myTeams, isLoading } = trpc.teams.getMyTeams.useQuery();
+  const { data: allTeams, isLoading: allTeamsLoading } = trpc.teams.getAll.useQuery(
+    undefined, 
+    { enabled: user?.role === 'admin' }
+  );
   
-  if (isLoading || !myTeams || myTeams.length === 0) {
+  const isAdmin = user?.role === 'admin';
+  const teams = isAdmin ? allTeams : myTeams;
+  const loading = isAdmin ? allTeamsLoading : isLoading;
+  
+  if (loading) {
     return null;
+  }
+  
+  // If no teams available, show a simplified button
+  if (!teams || teams.length === 0) {
+    return (
+      <Button variant="outline" size="sm" className="gap-2" disabled>
+        <Users className="h-4 w-4" />
+        {language === 'ar' ? 'لا توجد فرق' : 'No Teams'}
+      </Button>
+    );
   }
 
   const handleTeamSelect = (teamType: 'main' | 'academy' | null) => {
@@ -59,8 +79,8 @@ export function TeamSwitcher({ currentTeamType, onTeamChange }: TeamSwitcherProp
     : (language === 'ar' ? 'جميع الفرق' : 'All Teams');
 
   // Group teams by type
-  const mainTeams = myTeams.filter(t => t.teamType === 'main');
-  const academyTeams = myTeams.filter(t => t.teamType === 'academy');
+  const mainTeams = teams.filter(t => t.teamType === 'main');
+  const academyTeams = teams.filter(t => t.teamType === 'academy');
 
   return (
     <DropdownMenu>
@@ -79,7 +99,9 @@ export function TeamSwitcher({ currentTeamType, onTeamChange }: TeamSwitcherProp
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel>
-          {language === 'ar' ? 'الفرق المعينة' : 'My Assigned Teams'}
+          {isAdmin 
+            ? (language === 'ar' ? 'جميع الفرق' : 'All Teams')
+            : (language === 'ar' ? 'الفرق المعينة' : 'My Assigned Teams')}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
@@ -105,15 +127,15 @@ export function TeamSwitcher({ currentTeamType, onTeamChange }: TeamSwitcherProp
               >
                 <Trophy className="h-4 w-4 mr-2 text-yellow-500" />
                 <div className="flex-1">
-                  <div className="font-medium">{team.teamName}</div>
+                  <div className="font-medium">{team.teamName || team.name}</div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2">
                     {team.ageGroup}
-                    {team.role && (
+                    {!isAdmin && team.role && (
                       <Badge variant="outline" className="text-[10px] px-1 py-0">
                         {roleLabels[team.role]?.[language] || team.role}
                       </Badge>
                     )}
-                    {team.isPrimary && (
+                    {!isAdmin && team.isPrimary && (
                       <Badge className="text-[10px] px-1 py-0 bg-yellow-500">
                         {language === 'ar' ? 'رئيسي' : 'Primary'}
                       </Badge>
@@ -139,15 +161,15 @@ export function TeamSwitcher({ currentTeamType, onTeamChange }: TeamSwitcherProp
               >
                 <Shield className="h-4 w-4 mr-2 text-blue-500" />
                 <div className="flex-1">
-                  <div className="font-medium">{team.teamName}</div>
+                  <div className="font-medium">{team.teamName || team.name}</div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2">
                     {team.ageGroup}
-                    {team.role && (
+                    {!isAdmin && team.role && (
                       <Badge variant="outline" className="text-[10px] px-1 py-0">
                         {roleLabels[team.role]?.[language] || team.role}
                       </Badge>
                     )}
-                    {team.isPrimary && (
+                    {!isAdmin && team.isPrimary && (
                       <Badge className="text-[10px] px-1 py-0 bg-blue-500">
                         {language === 'ar' ? 'رئيسي' : 'Primary'}
                       </Badge>

@@ -452,13 +452,13 @@ export default function CoachProgressDashboard() {
               </CardContent>
             </Card>
           </Link>
-          <Link href="/skill-assessment">
+          <Link href="/performance">
             <Card className="cursor-pointer hover:bg-muted/50 transition-colors">
               <CardContent className="p-6 flex items-center gap-4">
                 <Target className="h-8 w-8 text-orange-600" />
                 <div>
-                  <h3 className="font-semibold">Skill Assessment</h3>
-                  <p className="text-sm text-muted-foreground">Rate player skills</p>
+                  <h3 className="font-semibold">Performance & Skills</h3>
+                  <p className="text-sm text-muted-foreground">Track performance and rate player skills</p>
                 </div>
               </CardContent>
             </Card>

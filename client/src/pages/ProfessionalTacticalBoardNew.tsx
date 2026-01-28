@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useLocation } from 'wouter';
 import { 
   Play, Pause, RotateCcw, Save, Download, Pencil, ArrowRight, 
-  Circle, Square, Type, Eraser, Sparkles, Target, Users
+  Circle, Square, Type, Eraser, Sparkles, Target, Users, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { trpc } from '@/lib/trpc';
@@ -47,55 +47,163 @@ const getFormationPositions = (formation: Formation, team: 'home' | 'away'): Pla
     case '4-3-3':
       if (isHome) {
         positions.push({ x: 100, y: 400, label: 'GK' });
-        positions.push({ x: 250, y: 150, label: 'LB' });
-        positions.push({ x: 250, y: 300, label: 'CB' });
-        positions.push({ x: 250, y: 500, label: 'CB' });
-        positions.push({ x: 250, y: 650, label: 'RB' });
-        positions.push({ x: 450, y: 200, label: 'CM' });
-        positions.push({ x: 450, y: 400, label: 'CM' });
-        positions.push({ x: 450, y: 600, label: 'CM' });
-        positions.push({ x: 650, y: 150, label: 'LW' });
-        positions.push({ x: 650, y: 400, label: 'ST' });
-        positions.push({ x: 650, y: 650, label: 'RW' });
+        positions.push({ x: 200, y: 150, label: 'LB' });
+        positions.push({ x: 200, y: 300, label: 'CB' });
+        positions.push({ x: 200, y: 500, label: 'CB' });
+        positions.push({ x: 200, y: 650, label: 'RB' });
+        positions.push({ x: 350, y: 200, label: 'CM' });
+        positions.push({ x: 350, y: 400, label: 'CM' });
+        positions.push({ x: 350, y: 600, label: 'CM' });
+        positions.push({ x: 500, y: 150, label: 'LW' });
+        positions.push({ x: 500, y: 400, label: 'ST' });
+        positions.push({ x: 500, y: 650, label: 'RW' });
       } else {
         positions.push({ x: 1100, y: 400, label: 'GK' });
-        positions.push({ x: 950, y: 150, label: 'LB' });
-        positions.push({ x: 950, y: 300, label: 'CB' });
-        positions.push({ x: 950, y: 500, label: 'CB' });
-        positions.push({ x: 950, y: 650, label: 'RB' });
-        positions.push({ x: 750, y: 200, label: 'CM' });
-        positions.push({ x: 750, y: 400, label: 'CM' });
-        positions.push({ x: 750, y: 600, label: 'CM' });
-        positions.push({ x: 550, y: 150, label: 'LW' });
-        positions.push({ x: 550, y: 400, label: 'ST' });
-        positions.push({ x: 550, y: 650, label: 'RW' });
+        positions.push({ x: 1000, y: 150, label: 'LB' });
+        positions.push({ x: 1000, y: 300, label: 'CB' });
+        positions.push({ x: 1000, y: 500, label: 'CB' });
+        positions.push({ x: 1000, y: 650, label: 'RB' });
+        positions.push({ x: 850, y: 200, label: 'CM' });
+        positions.push({ x: 850, y: 400, label: 'CM' });
+        positions.push({ x: 850, y: 600, label: 'CM' });
+        positions.push({ x: 700, y: 150, label: 'LW' });
+        positions.push({ x: 700, y: 400, label: 'ST' });
+        positions.push({ x: 700, y: 650, label: 'RW' });
       }
       break;
     case '4-4-2':
       if (isHome) {
         positions.push({ x: 100, y: 400, label: 'GK' });
-        positions.push({ x: 250, y: 150, label: 'LB' });
-        positions.push({ x: 250, y: 300, label: 'CB' });
-        positions.push({ x: 250, y: 500, label: 'CB' });
-        positions.push({ x: 250, y: 650, label: 'RB' });
-        positions.push({ x: 450, y: 150, label: 'LM' });
-        positions.push({ x: 450, y: 300, label: 'CM' });
-        positions.push({ x: 450, y: 500, label: 'CM' });
-        positions.push({ x: 450, y: 650, label: 'RM' });
-        positions.push({ x: 650, y: 300, label: 'ST' });
-        positions.push({ x: 650, y: 500, label: 'ST' });
+        positions.push({ x: 200, y: 150, label: 'LB' });
+        positions.push({ x: 200, y: 300, label: 'CB' });
+        positions.push({ x: 200, y: 500, label: 'CB' });
+        positions.push({ x: 200, y: 650, label: 'RB' });
+        positions.push({ x: 350, y: 150, label: 'LM' });
+        positions.push({ x: 350, y: 300, label: 'CM' });
+        positions.push({ x: 350, y: 500, label: 'CM' });
+        positions.push({ x: 350, y: 650, label: 'RM' });
+        positions.push({ x: 500, y: 300, label: 'ST' });
+        positions.push({ x: 500, y: 500, label: 'ST' });
       } else {
         positions.push({ x: 1100, y: 400, label: 'GK' });
-        positions.push({ x: 950, y: 150, label: 'LB' });
-        positions.push({ x: 950, y: 300, label: 'CB' });
-        positions.push({ x: 950, y: 500, label: 'CB' });
-        positions.push({ x: 950, y: 650, label: 'RB' });
-        positions.push({ x: 750, y: 150, label: 'LM' });
-        positions.push({ x: 750, y: 300, label: 'CM' });
-        positions.push({ x: 750, y: 500, label: 'CM' });
-        positions.push({ x: 750, y: 650, label: 'RM' });
-        positions.push({ x: 550, y: 300, label: 'ST' });
-        positions.push({ x: 550, y: 500, label: 'ST' });
+        positions.push({ x: 1000, y: 150, label: 'LB' });
+        positions.push({ x: 1000, y: 300, label: 'CB' });
+        positions.push({ x: 1000, y: 500, label: 'CB' });
+        positions.push({ x: 1000, y: 650, label: 'RB' });
+        positions.push({ x: 850, y: 150, label: 'LM' });
+        positions.push({ x: 850, y: 300, label: 'CM' });
+        positions.push({ x: 850, y: 500, label: 'CM' });
+        positions.push({ x: 850, y: 650, label: 'RM' });
+        positions.push({ x: 700, y: 300, label: 'ST' });
+        positions.push({ x: 700, y: 500, label: 'ST' });
+      }
+      break;
+    case '4-2-3-1':
+      if (isHome) {
+        positions.push({ x: 100, y: 400, label: 'GK' });
+        positions.push({ x: 200, y: 150, label: 'LB' });
+        positions.push({ x: 200, y: 300, label: 'CB' });
+        positions.push({ x: 200, y: 500, label: 'CB' });
+        positions.push({ x: 200, y: 650, label: 'RB' });
+        positions.push({ x: 300, y: 300, label: 'CDM' });
+        positions.push({ x: 300, y: 500, label: 'CDM' });
+        positions.push({ x: 450, y: 150, label: 'LAM' });
+        positions.push({ x: 450, y: 400, label: 'CAM' });
+        positions.push({ x: 450, y: 650, label: 'RAM' });
+        positions.push({ x: 550, y: 400, label: 'ST' });
+      } else {
+        positions.push({ x: 1100, y: 400, label: 'GK' });
+        positions.push({ x: 1000, y: 150, label: 'LB' });
+        positions.push({ x: 1000, y: 300, label: 'CB' });
+        positions.push({ x: 1000, y: 500, label: 'CB' });
+        positions.push({ x: 1000, y: 650, label: 'RB' });
+        positions.push({ x: 900, y: 300, label: 'CDM' });
+        positions.push({ x: 900, y: 500, label: 'CDM' });
+        positions.push({ x: 750, y: 150, label: 'LAM' });
+        positions.push({ x: 750, y: 400, label: 'CAM' });
+        positions.push({ x: 750, y: 650, label: 'RAM' });
+        positions.push({ x: 650, y: 400, label: 'ST' });
+      }
+      break;
+    case '3-5-2':
+      if (isHome) {
+        positions.push({ x: 100, y: 400, label: 'GK' });
+        positions.push({ x: 200, y: 250, label: 'CB' });
+        positions.push({ x: 200, y: 400, label: 'CB' });
+        positions.push({ x: 200, y: 550, label: 'CB' });
+        positions.push({ x: 350, y: 100, label: 'LWB' });
+        positions.push({ x: 350, y: 280, label: 'CM' });
+        positions.push({ x: 350, y: 400, label: 'CM' });
+        positions.push({ x: 350, y: 520, label: 'CM' });
+        positions.push({ x: 350, y: 700, label: 'RWB' });
+        positions.push({ x: 500, y: 300, label: 'ST' });
+        positions.push({ x: 500, y: 500, label: 'ST' });
+      } else {
+        positions.push({ x: 1100, y: 400, label: 'GK' });
+        positions.push({ x: 1000, y: 250, label: 'CB' });
+        positions.push({ x: 1000, y: 400, label: 'CB' });
+        positions.push({ x: 1000, y: 550, label: 'CB' });
+        positions.push({ x: 850, y: 100, label: 'LWB' });
+        positions.push({ x: 850, y: 280, label: 'CM' });
+        positions.push({ x: 850, y: 400, label: 'CM' });
+        positions.push({ x: 850, y: 520, label: 'CM' });
+        positions.push({ x: 850, y: 700, label: 'RWB' });
+        positions.push({ x: 700, y: 300, label: 'ST' });
+        positions.push({ x: 700, y: 500, label: 'ST' });
+      }
+      break;
+    case '3-4-3':
+      if (isHome) {
+        positions.push({ x: 100, y: 400, label: 'GK' });
+        positions.push({ x: 200, y: 250, label: 'CB' });
+        positions.push({ x: 200, y: 400, label: 'CB' });
+        positions.push({ x: 200, y: 550, label: 'CB' });
+        positions.push({ x: 350, y: 150, label: 'LM' });
+        positions.push({ x: 350, y: 320, label: 'CM' });
+        positions.push({ x: 350, y: 480, label: 'CM' });
+        positions.push({ x: 350, y: 650, label: 'RM' });
+        positions.push({ x: 500, y: 200, label: 'LW' });
+        positions.push({ x: 500, y: 400, label: 'ST' });
+        positions.push({ x: 500, y: 600, label: 'RW' });
+      } else {
+        positions.push({ x: 1100, y: 400, label: 'GK' });
+        positions.push({ x: 1000, y: 250, label: 'CB' });
+        positions.push({ x: 1000, y: 400, label: 'CB' });
+        positions.push({ x: 1000, y: 550, label: 'CB' });
+        positions.push({ x: 850, y: 150, label: 'LM' });
+        positions.push({ x: 850, y: 320, label: 'CM' });
+        positions.push({ x: 850, y: 480, label: 'CM' });
+        positions.push({ x: 850, y: 650, label: 'RM' });
+        positions.push({ x: 700, y: 200, label: 'LW' });
+        positions.push({ x: 700, y: 400, label: 'ST' });
+        positions.push({ x: 700, y: 600, label: 'RW' });
+      }
+      break;
+    case '5-3-2':
+      if (isHome) {
+        positions.push({ x: 100, y: 400, label: 'GK' });
+        positions.push({ x: 200, y: 100, label: 'LWB' });
+        positions.push({ x: 200, y: 260, label: 'CB' });
+        positions.push({ x: 200, y: 400, label: 'CB' });
+        positions.push({ x: 200, y: 540, label: 'CB' });
+        positions.push({ x: 200, y: 700, label: 'RWB' });
+        positions.push({ x: 350, y: 250, label: 'CM' });
+        positions.push({ x: 350, y: 400, label: 'CM' });
+        positions.push({ x: 350, y: 550, label: 'CM' });
+        positions.push({ x: 500, y: 300, label: 'ST' });
+        positions.push({ x: 500, y: 500, label: 'ST' });
+      } else {
+        positions.push({ x: 1100, y: 400, label: 'GK' });
+        positions.push({ x: 1000, y: 100, label: 'LWB' });
+        positions.push({ x: 1000, y: 260, label: 'CB' });
+        positions.push({ x: 1000, y: 400, label: 'CB' });
+        positions.push({ x: 1000, y: 540, label: 'CB' });
+        positions.push({ x: 1000, y: 700, label: 'RWB' });
+        positions.push({ x: 850, y: 250, label: 'CM' });
+        positions.push({ x: 850, y: 400, label: 'CM' });
+        positions.push({ x: 850, y: 550, label: 'CM' });
+        positions.push({ x: 700, y: 300, label: 'ST' });
+        positions.push({ x: 700, y: 500, label: 'ST' });
       }
       break;
     default:
@@ -127,8 +235,19 @@ export default function ProfessionalTacticalBoard() {
   const [currentDrawing, setCurrentDrawing] = useState<DrawingElement | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationFrame, setSimulationFrame] = useState(0);
+  const [savedFormations, setSavedFormations] = useState<any[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [formationName, setFormationName] = useState('');
+  const [showManageDialog, setShowManageDialog] = useState(false);
+  const [saveForTeam, setSaveForTeam] = useState<'blue' | 'red'>('blue');
+  const isLoadingFormationRef = useRef(false);
+  const [homeFormationValue, setHomeFormationValue] = useState<string>('4-3-3');
+  const [awayFormationValue, setAwayFormationValue] = useState<string>('4-4-2');
 
   const { data: teams } = trpc.teams.getAll.useQuery();
+  const { data: userFormations, refetch: refetchFormations } = trpc.tactics.getUserFormations.useQuery();
+  const saveTacticalBoard = trpc.tactics.saveTacticalBoard.useMutation();
+  const deleteFormationMutation = trpc.tactics.deleteFormation.useMutation();
 
   const CANVAS_WIDTH = 1200;
   const CANVAS_HEIGHT = 800;
@@ -136,12 +255,37 @@ export default function ProfessionalTacticalBoard() {
 
   // Initialize players
   useEffect(() => {
-    setHomePlayers(getFormationPositions(homeFormation, 'home'));
+    if (!isLoadingFormationRef.current) {
+      setHomePlayers(getFormationPositions(homeFormation, 'home'));
+    }
   }, [homeFormation]);
 
   useEffect(() => {
-    setAwayPlayers(getFormationPositions(awayFormation, 'away'));
+    if (!isLoadingFormationRef.current) {
+      setAwayPlayers(getFormationPositions(awayFormation, 'away'));
+    }
   }, [awayFormation]);
+
+  // Update saved formations when data loads
+  useEffect(() => {
+    console.log('userFormations from query:', userFormations);
+    if (userFormations && Array.isArray(userFormations)) {
+      setSavedFormations(userFormations);
+      console.log('Set savedFormations to:', userFormations.length, 'items');
+      
+      // Set initial dropdown values to match the saved formations
+      // Find the saved formation that matches the initial home formation
+      const homeMatch = userFormations.find(f => f.name === homeFormation);
+      if (homeMatch) {
+        setHomeFormationValue(`saved:${homeMatch.id}`);
+      }
+      
+      const awayMatch = userFormations.find(f => f.name === awayFormation);
+      if (awayMatch) {
+        setAwayFormationValue(`saved:${awayMatch.id}`);
+      }
+    }
+  }, [userFormations]);
 
   // Draw pitch and players
   useEffect(() => {
@@ -150,6 +294,9 @@ export default function ProfessionalTacticalBoard() {
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
+    // Guard against undefined players arrays
+    if (!Array.isArray(homePlayers) || !Array.isArray(awayPlayers)) return;
 
     // Clear canvas
     ctx.fillStyle = '#2d5016';
@@ -307,7 +454,7 @@ export default function ProfessionalTacticalBoard() {
       ctx.font = 'bold 14px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(player.number.toString(), player.x, player.y);
+      ctx.fillText((player.number || player.id || '').toString(), player.x, player.y);
 
       // Label
       ctx.font = '10px Arial';
@@ -327,6 +474,9 @@ export default function ProfessionalTacticalBoard() {
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    
+    // Guard against undefined arrays
+    if (!Array.isArray(homePlayers) || !Array.isArray(awayPlayers)) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -347,8 +497,40 @@ export default function ProfessionalTacticalBoard() {
     if (drawingTool === 'eraser') {
       // Remove drawings near click
       setDrawings(prev => prev.filter(d => {
-        const dist = Math.sqrt(Math.pow(d.startX - x, 2) + Math.pow(d.startY - y, 2));
-        return dist > 30;
+        const eraserRadius = 30;
+        
+        // Check if click is near the drawing
+        if (d.type === 'circle') {
+          // For circles, check distance from center
+          const centerDist = Math.sqrt(Math.pow(d.startX - x, 2) + Math.pow(d.startY - y, 2));
+          return centerDist > (d.radius || 30) + eraserRadius;
+        } else if (d.type === 'text') {
+          // For text, check distance from position
+          const dist = Math.sqrt(Math.pow(d.startX - x, 2) + Math.pow(d.startY - y, 2));
+          return dist > eraserRadius;
+        } else if (d.endX !== undefined && d.endY !== undefined) {
+          // For lines, arrows, and rectangles - check distance to line segment
+          const distToStart = Math.sqrt(Math.pow(d.startX - x, 2) + Math.pow(d.startY - y, 2));
+          const distToEnd = Math.sqrt(Math.pow(d.endX - x, 2) + Math.pow(d.endY - y, 2));
+          
+          // Calculate distance from point to line segment
+          const lineLength = Math.sqrt(Math.pow(d.endX - d.startX, 2) + Math.pow(d.endY - d.startY, 2));
+          if (lineLength === 0) return distToStart > eraserRadius;
+          
+          const t = Math.max(0, Math.min(1, 
+            ((x - d.startX) * (d.endX - d.startX) + (y - d.startY) * (d.endY - d.startY)) / (lineLength * lineLength)
+          ));
+          
+          const projX = d.startX + t * (d.endX - d.startX);
+          const projY = d.startY + t * (d.endY - d.startY);
+          const distToLine = Math.sqrt(Math.pow(projX - x, 2) + Math.pow(projY - y, 2));
+          
+          return distToLine > eraserRadius;
+        } else {
+          // Fallback for other types
+          const dist = Math.sqrt(Math.pow(d.startX - x, 2) + Math.pow(d.startY - y, 2));
+          return dist > eraserRadius;
+        }
       }));
       return;
     }
@@ -416,16 +598,154 @@ export default function ProfessionalTacticalBoard() {
   };
 
   const saveBoard = () => {
-    const boardData = {
-      homePlayers,
-      awayPlayers,
-      drawings,
-      homeFormation,
-      awayFormation,
-      timestamp: new Date().toISOString()
-    };
-    localStorage.setItem('tactical-board', JSON.stringify(boardData));
-    toast.success("Board saved!");
+    setShowSaveDialog(true);
+  };
+
+  const saveFormationWithName = async () => {
+    if (!formationName.trim()) {
+      toast.error("Please enter a formation name");
+      return;
+    }
+
+    try {
+      console.log('Saving formation with name:', formationName);
+      console.log('Saving for team:', saveForTeam);
+      
+      const result = await saveTacticalBoard.mutateAsync({
+        name: formationName,
+        homeFormation: saveForTeam === 'blue' ? homeFormation : awayFormation,
+        awayFormation: '', // Not needed for single team save
+        homePlayers: JSON.stringify(saveForTeam === 'blue' ? homePlayers : awayPlayers),
+        awayPlayers: JSON.stringify([]), // Not needed for single team save
+        drawings: JSON.stringify([]), // Clear drawings for single team
+        teamId: undefined,
+      });
+
+      console.log('Save result:', result);
+      
+      await refetchFormations();
+      setShowSaveDialog(false);
+      setFormationName('');
+      toast.success(`Formation "${formationName}" saved!`);
+    } catch (error) {
+      toast.error("Failed to save formation");
+      console.error('Save error:', error);
+    }
+  };
+
+  // Mirror player positions horizontally for applying to opposite team
+  const mirrorPositions = (players: Player[]): Player[] => {
+    return players.map(player => ({
+      ...player,
+      x: CANVAS_WIDTH - player.x, // Mirror across center line
+    }));
+  };
+
+  // Handle formation selection from dropdown
+  const handleFormationSelect = (value: string, team: 'home' | 'away') => {
+    // Check if it's a saved formation
+    if (value.startsWith('saved:')) {
+      const formationId = parseInt(value.replace('saved:', ''));
+      const formation = savedFormations.find(f => f.id === formationId);
+      if (formation) {
+        loadFormation(formation, team);
+        // Update the dropdown value to show the selection
+        if (team === 'home') {
+          setHomeFormationValue(value);
+        } else {
+          setAwayFormationValue(value);
+        }
+      }
+    } else {
+      // It's a preset formation
+      if (team === 'home') {
+        setHomeFormation(value as Formation);
+        setHomeFormationValue(value);
+      } else {
+        setAwayFormation(value as Formation);
+        setAwayFormationValue(value);
+      }
+    }
+  };
+
+  const loadFormation = (formation: any, team: 'home' | 'away') => {
+    try {
+      console.log('Loading formation:', formation, 'for team:', team);
+      
+      // Check if positions is valid JSON with data
+      let positions;
+      try {
+        positions = JSON.parse(formation.positions);
+      } catch (e) {
+        positions = null;
+      }
+      
+      console.log('Parsed positions:', positions);
+      
+      // Check if it's a new format formation with player positions
+      if (positions && positions.homePlayers) {
+        // Set loading flag BEFORE any state updates - using ref for synchronous behavior
+        isLoadingFormationRef.current = true;
+        
+        // Check if formation needs to be mirrored based on average x position
+        const avgX = positions.homePlayers.reduce((sum: number, p: any) => sum + p.x, 0) / positions.homePlayers.length;
+        const isRightSide = avgX > CANVAS_WIDTH / 2; // Formation is on right side (red team)
+        
+        // Ensure all players have required properties with unique IDs
+        const enrichPlayers = (players: any[], teamType: 'home' | 'away') => 
+          players.map((p: any, idx: number) => ({
+            ...p,
+            id: `${teamType}-${idx}`, // Always generate new ID based on target team
+            number: p.number || idx + 1,
+            team: teamType,
+          }));
+        
+        if (team === 'home') {
+          // Apply to Blue (home) team
+          setHomeFormation(positions.homeFormation as Formation);
+          let players = enrichPlayers(positions.homePlayers, 'home');
+          // If formation was saved from right side, mirror it to left side
+          if (isRightSide) {
+            players = mirrorPositions(players);
+          }
+          setHomePlayers(players);
+        } else {
+          // Apply to Red (away) team
+          setAwayFormation(positions.homeFormation as Formation);
+          let players = enrichPlayers(positions.homePlayers, 'away');
+          // If formation was saved from left side, mirror it to right side
+          if (!isRightSide) {
+            players = mirrorPositions(players);
+          }
+          setAwayPlayers(players);
+        }
+        
+        // Reset flag after React has processed the updates
+        setTimeout(() => {
+          isLoadingFormationRef.current = false;
+        }, 100);
+        
+        toast.success(`Formation "${formation.name}" loaded!`);
+      } else {
+        // Old format - just use the template name as the formation
+        toast.error("This formation doesn't have saved player positions. Please save a new formation.");
+      }
+    } catch (error) {
+      toast.error("Failed to load formation");
+      console.error('Load formation error:', error);
+      isLoadingFormationRef.current = false;
+    }
+  };
+
+  const deleteFormation = async (id: number) => {
+    try {
+      await deleteFormationMutation.mutateAsync({ id });
+      await refetchFormations();
+      toast.success("Formation deleted!");
+    } catch (error) {
+      toast.error("Failed to delete formation");
+      console.error(error);
+    }
   };
 
   const exportImage = () => {
@@ -463,34 +783,32 @@ export default function ProfessionalTacticalBoard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Home Formation (Blue)</label>
-                <Select value={homeFormation} onValueChange={(v) => setHomeFormation(v as Formation)}>
+                <Select value={homeFormationValue} onValueChange={(v) => handleFormationSelect(v, 'home')}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select formation" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="4-3-3">4-3-3</SelectItem>
-                    <SelectItem value="4-4-2">4-4-2</SelectItem>
-                    <SelectItem value="3-5-2">3-5-2</SelectItem>
-                    <SelectItem value="4-2-3-1">4-2-3-1</SelectItem>
-                    <SelectItem value="3-4-3">3-4-3</SelectItem>
-                    <SelectItem value="5-3-2">5-3-2</SelectItem>
+                    {savedFormations.map((f) => (
+                      <SelectItem key={`saved-home-${f.id}`} value={`saved:${f.id}`}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Away Formation (Red)</label>
-                <Select value={awayFormation} onValueChange={(v) => setAwayFormation(v as Formation)}>
+                <Select value={awayFormationValue} onValueChange={(v) => handleFormationSelect(v, 'away')}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select formation" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="4-3-3">4-3-3</SelectItem>
-                    <SelectItem value="4-4-2">4-4-2</SelectItem>
-                    <SelectItem value="3-5-2">3-5-2</SelectItem>
-                    <SelectItem value="4-2-3-1">4-2-3-1</SelectItem>
-                    <SelectItem value="3-4-3">3-4-3</SelectItem>
-                    <SelectItem value="5-3-2">5-3-2</SelectItem>
+                    {savedFormations.map((f) => (
+                      <SelectItem key={`saved-away-${f.id}`} value={`saved:${f.id}`}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -559,7 +877,11 @@ export default function ProfessionalTacticalBoard() {
               </Button>
               <Button onClick={saveBoard} variant="outline" size="sm">
                 <Save className="h-4 w-4 mr-2" />
-                Save
+                Save Formation
+              </Button>
+              <Button onClick={() => setShowManageDialog(true)} variant="outline" size="sm">
+                <Target className="h-4 w-4 mr-2" />
+                Manage Formations
               </Button>
               <Button onClick={exportImage} variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
@@ -568,6 +890,97 @@ export default function ProfessionalTacticalBoard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Save Formation Dialog */}
+        {showSaveDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSaveDialog(false)}>
+            <Card className="w-96" onClick={(e) => e.stopPropagation()}>
+              <CardHeader>
+                <CardTitle>Save Formation</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Formation Name</label>
+                  <input
+                    type="text"
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g., High Press 4-3-3"
+                    value={formationName}
+                    onChange={(e) => setFormationName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveFormationWithName()}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Save Formation For</label>
+                  <Select value={saveForTeam} onValueChange={(value: 'blue' | 'red') => setSaveForTeam(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="blue">Blue Team (Your Team)</SelectItem>
+                      <SelectItem value="red">Red Team (Opponents)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={saveFormationWithName} className="flex-1">
+                    <Save className="h-4 w-4 mr-2" />
+                    Save
+                  </Button>
+                  <Button onClick={() => { setShowSaveDialog(false); setFormationName(''); }} variant="outline" className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Manage Formations Dialog */}
+        {showManageDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowManageDialog(false)}>
+            <Card className="w-[600px] max-h-[600px] overflow-auto" onClick={(e) => e.stopPropagation()}>
+              <CardHeader>
+                <CardTitle>Manage Formations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {savedFormations.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No saved formations yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {savedFormations.map((formation) => (
+                      <div key={formation.id} className="flex items-center justify-between p-3 border rounded hover:bg-slate-50">
+                        <div className="flex-1">
+                          <p className="font-medium">{formation.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formation.templateName} • {new Date(formation.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Button 
+                          onClick={() => {
+                            if (window.confirm(`Delete formation "${formation.name}"?`)) {
+                              deleteFormation(formation.id);
+                            }
+                          }} 
+                          variant="destructive" 
+                          size="sm"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+              <div className="p-4 border-t">
+                <Button onClick={() => setShowManageDialog(false)} variant="outline" className="w-full">
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Canvas */}
         <Card>

@@ -1,774 +1,690 @@
-import DashboardLayout from "@/components/DashboardLayout";
+import { useState, useEffect } from "react";
+import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useParentChild } from "@/contexts/ParentChildContext";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { trpc } from "@/lib/trpc";
-import { useState, useEffect } from "react";
-import { Plus, Activity, Zap, Target, TrendingUp, Footprints, Timer } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  User,
+  Target,
+  Zap,
+  Activity,
+  Brain,
+  Shield,
+  TrendingUp,
+  CheckCircle,
+  AlertCircle,
+  History,
+  Star,
+  FileDown,
+  Save,
+  Plus,
+  Timer,
+  Footprints,
+} from "lucide-react";
 import { toast } from "sonner";
+import { exportSkillAssessmentPDF } from "@/lib/pdfExport";
 
-function MetricCard({ 
-  label, 
-  value, 
-  unit, 
-  icon: Icon, 
-  trend,
-  color = "primary" 
-}: { 
-  label: string; 
-  value: number | string; 
-  unit?: string;
+interface SkillScore {
+  name: string;
+  key: string;
+  value: number;
   icon: React.ElementType;
-  trend?: number;
-  color?: string;
-}) {
-  return (
-    <div className="p-4 rounded-xl bg-muted/50 border border-border">
-      <div className="flex items-center justify-between mb-2">
-        <Icon className={`h-5 w-5 text-${color}`} />
-        {trend !== undefined && (
-          <span className={`text-xs ${trend >= 0 ? 'text-primary' : 'text-destructive'}`}>
-            {trend >= 0 ? '+' : ''}{trend}%
-          </span>
-        )}
-      </div>
-      <div className="text-2xl font-bold">
-        {value}
-        {unit && <span className="text-sm font-normal text-muted-foreground ml-1">{unit}</span>}
-      </div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-    </div>
-  );
+  color: string;
+  description: string;
 }
 
-function RecordPerformanceDialog({ preselectedPlayerId }: { preselectedPlayerId?: string }) {
-  const [open, setOpen] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState('');
-  const [formData, setFormData] = useState({
-    sessionDate: new Date().toISOString().split('T')[0],
-    sessionType: 'training' as const,
-    touches: '',
-    passes: '',
-    passAccuracy: '',
-    shots: '',
-    shotsOnTarget: '',
-    dribbles: '',
-    successfulDribbles: '',
-    distanceCovered: '',
-    topSpeed: '',
-    sprints: '',
-    accelerations: '',
-    decelerations: '',
-    possessionWon: '',
-    possessionLost: '',
-    interceptions: '',
-    tackles: '',
-    technicalScore: '',
-    physicalScore: '',
-    tacticalScore: '',
-    overallScore: '',
-    notes: '',
+const SKILLS: SkillScore[] = [
+  { name: "Ball Control", key: "ballControl", value: 50, icon: Target, color: "bg-blue-500", description: "First touch, receiving, trapping" },
+  { name: "Passing", key: "passing", value: 50, icon: Zap, color: "bg-green-500", description: "Short, long, through balls" },
+  { name: "Shooting", key: "shooting", value: 50, icon: Target, color: "bg-red-500", description: "Power, accuracy, finishing" },
+  { name: "Dribbling", key: "dribbling", value: 50, icon: Activity, color: "bg-purple-500", description: "Close control, 1v1, skill moves" },
+  { name: "Speed", key: "speed", value: 50, icon: Zap, color: "bg-yellow-500", description: "Acceleration, top speed, agility" },
+  { name: "Stamina", key: "stamina", value: 50, icon: Activity, color: "bg-orange-500", description: "Endurance, recovery, work rate" },
+  { name: "Defending", key: "defending", value: 50, icon: Shield, color: "bg-slate-500", description: "Tackling, positioning, marking" },
+  { name: "Tactical Awareness", key: "tactical", value: 50, icon: Brain, color: "bg-indigo-500", description: "Positioning, decision making, game reading" },
+];
+
+// Performance metrics structure
+interface PerformanceMetric {
+  name: string;
+  key: string;
+  value: number;
+  icon: React.ElementType;
+  color: string;
+  description: string;
+  unit?: string;
+}
+
+const PERFORMANCE_METRICS: PerformanceMetric[] = [
+  { name: "Touches", key: "touches", value: 0, icon: Footprints, color: "bg-blue-500", description: "Total ball touches" },
+  { name: "Passes", key: "passes", value: 0, icon: Target, color: "bg-green-500", description: "Total passes attempted" },
+  { name: "Pass Accuracy", key: "passAccuracy", value: 0, icon: Target, color: "bg-emerald-500", description: "Successful pass percentage", unit: "%" },
+  { name: "Shots", key: "shots", value: 0, icon: Zap, color: "bg-red-500", description: "Total shots taken" },
+  { name: "Shots on Target", key: "shotsOnTarget", value: 0, icon: Target, color: "bg-orange-500", description: "Shots hitting the target" },
+  { name: "Dribbles", key: "dribbles", value: 0, icon: Activity, color: "bg-purple-500", description: "Dribble attempts" },
+  { name: "Distance Covered", key: "distanceCovered", value: 0, icon: TrendingUp, color: "bg-cyan-500", description: "Total distance run", unit: "km" },
+  { name: "Top Speed", key: "topSpeed", value: 0, icon: Zap, color: "bg-yellow-500", description: "Maximum speed reached", unit: "km/h" },
+  { name: "Sprints", key: "sprints", value: 0, icon: Timer, color: "bg-pink-500", description: "High-intensity runs" },
+  { name: "Tackles", key: "tackles", value: 0, icon: Shield, color: "bg-slate-500", description: "Successful tackles" },
+  { name: "Interceptions", key: "interceptions", value: 0, icon: Brain, color: "bg-indigo-500", description: "Passes intercepted" },
+];
+
+export default function Performance() {
+  const { user } = useAuth();
+  const { selectedChildId } = useParentChild();
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("");
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<string>("skills");
+  
+  // Skill Assessment State
+  const [skills, setSkills] = useState<SkillScore[]>(SKILLS.map(s => ({ ...s })));
+  const [skillNotes, setSkillNotes] = useState("");
+  const [saveSkillSuccess, setSaveSkillSuccess] = useState(false);
+
+  // Performance State
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetric[]>(PERFORMANCE_METRICS.map(m => ({ ...m })));
+  const [sessionType, setSessionType] = useState<string>("training");
+  const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [performanceNotes, setPerformanceNotes] = useState("");
+  const [savePerformanceSuccess, setSavePerformanceSuccess] = useState(false);
+
+  // Fetch teams
+  const { data: teams, isLoading: teamsLoading } = trpc.teams.getAll.useQuery();
+
+  // Fetch players
+  const { data: players, isLoading: playersLoading } = trpc.players.getAll.useQuery();
+
+  // Filter players by selected team
+  const filteredPlayers = players?.filter((p: any) => 
+    selectedTeamId ? p.teamId?.toString() === selectedTeamId : false
+  );
+
+  // Reset player selection when team changes
+  useEffect(() => {
+    if (selectedTeamId) {
+      setSelectedPlayerId("");
+    }
+  }, [selectedTeamId]);
+
+  // Auto-select child for parent
+  useEffect(() => {
+    if (user?.role === 'parent' && selectedChildId && !selectedPlayerId) {
+      setSelectedPlayerId(selectedChildId);
+      // Auto-select the team of the child player
+      const childPlayer = players?.find((p: any) => p.id.toString() === selectedChildId);
+      if (childPlayer?.teamId) {
+        setSelectedTeamId(childPlayer.teamId.toString());
+      }
+    }
+  }, [user, selectedChildId, selectedPlayerId, players]);
+
+  // Save skill scores mutation
+  const saveSkillsMutation = trpc.skillScores.create.useMutation({
+    onSuccess: () => {
+      setSaveSkillSuccess(true);
+      setTimeout(() => setSaveSkillSuccess(false), 3000);
+      toast.success('Skill assessment saved successfully');
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to save skill assessment');
+    },
   });
 
-  const { data: players } = trpc.players.getAll.useQuery();
-  const utils = trpc.useUtils();
-  
-  const createMetric = trpc.performance.create.useMutation({
+  // Save performance mutation
+  const savePerformanceMutation = trpc.performance.create.useMutation({
     onSuccess: () => {
+      setSavePerformanceSuccess(true);
+      setTimeout(() => setSavePerformanceSuccess(false), 3000);
       toast.success('Performance recorded successfully');
-      setOpen(false);
-      utils.performance.getPlayerMetrics.invalidate();
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to record performance');
     },
   });
 
-  useEffect(() => {
-    if (open && preselectedPlayerId) {
-      setSelectedPlayer(preselectedPlayerId);
-    }
-  }, [open, preselectedPlayerId]);
+  // Get player's skill history
+  const { data: skillHistory } = trpc.skillScores.getHistory.useQuery(
+    { playerId: parseInt(selectedPlayerId) },
+    { enabled: !!selectedPlayerId }
+  );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPlayer) {
-      toast.error('Please select a player');
-      return;
-    }
-    createMetric.mutate({
-      playerId: parseInt(selectedPlayer),
-      ...formData,
-      touches: formData.touches ? parseInt(formData.touches) : undefined,
-      passes: formData.passes ? parseInt(formData.passes) : undefined,
-      passAccuracy: formData.passAccuracy ? parseInt(formData.passAccuracy) : undefined,
-      shots: formData.shots ? parseInt(formData.shots) : undefined,
-      shotsOnTarget: formData.shotsOnTarget ? parseInt(formData.shotsOnTarget) : undefined,
-      dribbles: formData.dribbles ? parseInt(formData.dribbles) : undefined,
-      successfulDribbles: formData.successfulDribbles ? parseInt(formData.successfulDribbles) : undefined,
-      distanceCovered: formData.distanceCovered ? parseFloat(formData.distanceCovered) : undefined,
-      topSpeed: formData.topSpeed ? parseFloat(formData.topSpeed) : undefined,
-      sprints: formData.sprints ? parseInt(formData.sprints) : undefined,
-      accelerations: formData.accelerations ? parseInt(formData.accelerations) : undefined,
-      decelerations: formData.decelerations ? parseInt(formData.decelerations) : undefined,
-      possessionWon: formData.possessionWon ? parseInt(formData.possessionWon) : undefined,
-      possessionLost: formData.possessionLost ? parseInt(formData.possessionLost) : undefined,
-      interceptions: formData.interceptions ? parseInt(formData.interceptions) : undefined,
-      tackles: formData.tackles ? parseInt(formData.tackles) : undefined,
-      technicalScore: formData.technicalScore ? parseInt(formData.technicalScore) : undefined,
-      physicalScore: formData.physicalScore ? parseInt(formData.physicalScore) : undefined,
-      tacticalScore: formData.tacticalScore ? parseInt(formData.tacticalScore) : undefined,
-      overallScore: formData.overallScore ? parseInt(formData.overallScore) : undefined,
+  // Get player's performance history
+  const { data: performanceHistory } = trpc.performance.getPlayerMetrics.useQuery(
+    { playerId: parseInt(selectedPlayerId), limit: 10 },
+    { enabled: !!selectedPlayerId }
+  );
+
+  const selectedPlayer = players?.find((p: any) => p.id.toString() === selectedPlayerId);
+
+  const updateSkill = (key: string, value: number) => {
+    setSkills(prev => prev.map(s => s.key === key ? { ...s, value } : s));
+  };
+
+  const updatePerformanceMetric = (key: string, value: number) => {
+    setPerformanceMetrics(prev => prev.map(m => m.key === key ? { ...m, value } : m));
+  };
+
+  const handleSaveSkills = () => {
+    if (!selectedPlayerId) return;
+    saveSkillsMutation.mutate({
+      playerId: parseInt(selectedPlayerId),
+      assessmentDate: new Date().toISOString().split('T')[0],
+      ballControl: skills.find(s => s.key === 'ballControl')?.value,
+      passing: skills.find(s => s.key === 'passing')?.value,
+      shooting: skills.find(s => s.key === 'shooting')?.value,
+      dribbling: skills.find(s => s.key === 'dribbling')?.value,
+      speed: skills.find(s => s.key === 'speed')?.value,
+      stamina: skills.find(s => s.key === 'stamina')?.value,
+      tackling: skills.find(s => s.key === 'defending')?.value,
+      positioning: skills.find(s => s.key === 'tactical')?.value,
+      notes: skillNotes || undefined,
     });
   };
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gradient-primary text-primary-foreground">
-          <Plus className="h-4 w-4 mr-2" />
-          Record Performance
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Record Performance Metrics</DialogTitle>
-          <DialogDescription>
-            Enter performance data from training or match sessions.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Player</Label>
-                <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select player" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[10001]">
-                    {players?.map((player: any) => (
-                      <SelectItem key={player.id} value={player.id.toString()}>
-                        {player.firstName} {player.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Session Type</Label>
-                <Select
-                  value={formData.sessionType}
-                  onValueChange={(value: any) => setFormData({ ...formData, sessionType: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="z-[10001]">
-                    <SelectItem value="training">Training</SelectItem>
-                    <SelectItem value="match">Match</SelectItem>
-                    <SelectItem value="assessment">Assessment</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+  const handleSavePerformance = () => {
+    if (!selectedPlayerId) return;
+    savePerformanceMutation.mutate({
+      playerId: parseInt(selectedPlayerId),
+      sessionDate: sessionDate,
+      sessionType: sessionType as any,
+      touches: performanceMetrics.find(m => m.key === 'touches')?.value || undefined,
+      passes: performanceMetrics.find(m => m.key === 'passes')?.value || undefined,
+      passAccuracy: performanceMetrics.find(m => m.key === 'passAccuracy')?.value || undefined,
+      shots: performanceMetrics.find(m => m.key === 'shots')?.value || undefined,
+      shotsOnTarget: performanceMetrics.find(m => m.key === 'shotsOnTarget')?.value || undefined,
+      dribbles: performanceMetrics.find(m => m.key === 'dribbles')?.value || undefined,
+      distanceCovered: performanceMetrics.find(m => m.key === 'distanceCovered')?.value || undefined,
+      topSpeed: performanceMetrics.find(m => m.key === 'topSpeed')?.value || undefined,
+      sprints: performanceMetrics.find(m => m.key === 'sprints')?.value || undefined,
+      tackles: performanceMetrics.find(m => m.key === 'tackles')?.value || undefined,
+      interceptions: performanceMetrics.find(m => m.key === 'interceptions')?.value || undefined,
+      notes: performanceNotes || undefined,
+    });
+  };
 
-            <div className="space-y-2">
-              <Label>Session Date</Label>
-              <Input
-                type="date"
-                value={formData.sessionDate}
-                onChange={(e) => setFormData({ ...formData, sessionDate: e.target.value })}
-              />
-            </div>
+  const getScoreLabel = (score: number) => {
+    if (score >= 90) return { label: "Elite", color: "text-purple-500" };
+    if (score >= 80) return { label: "Excellent", color: "text-green-500" };
+    if (score >= 70) return { label: "Good", color: "text-blue-500" };
+    if (score >= 60) return { label: "Average", color: "text-yellow-500" };
+    if (score >= 50) return { label: "Developing", color: "text-orange-500" };
+    return { label: "Needs Work", color: "text-red-500" };
+  };
 
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-3">Technical Metrics</h4>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Touches</Label>
-                  <Input
-                    type="number"
-                    value={formData.touches}
-                    onChange={(e) => setFormData({ ...formData, touches: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Passes</Label>
-                  <Input
-                    type="number"
-                    value={formData.passes}
-                    onChange={(e) => setFormData({ ...formData, passes: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Pass Accuracy %</Label>
-                  <Input
-                    type="number"
-                    value={formData.passAccuracy}
-                    onChange={(e) => setFormData({ ...formData, passAccuracy: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Shots</Label>
-                  <Input
-                    type="number"
-                    value={formData.shots}
-                    onChange={(e) => setFormData({ ...formData, shots: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Shots on Target</Label>
-                  <Input
-                    type="number"
-                    value={formData.shotsOnTarget}
-                    onChange={(e) => setFormData({ ...formData, shotsOnTarget: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Dribbles</Label>
-                  <Input
-                    type="number"
-                    value={formData.dribbles}
-                    onChange={(e) => setFormData({ ...formData, dribbles: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Successful Dribbles</Label>
-                  <Input
-                    type="number"
-                    value={formData.successfulDribbles}
-                    onChange={(e) => setFormData({ ...formData, successfulDribbles: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-3">Physical Metrics</h4>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Distance (km)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={formData.distanceCovered}
-                    onChange={(e) => setFormData({ ...formData, distanceCovered: e.target.value })}
-                    placeholder="0.0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Top Speed (km/h)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={formData.topSpeed}
-                    onChange={(e) => setFormData({ ...formData, topSpeed: e.target.value })}
-                    placeholder="0.0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Sprints</Label>
-                  <Input
-                    type="number"
-                    value={formData.sprints}
-                    onChange={(e) => setFormData({ ...formData, sprints: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Accelerations</Label>
-                  <Input
-                    type="number"
-                    value={formData.accelerations}
-                    onChange={(e) => setFormData({ ...formData, accelerations: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Decelerations</Label>
-                  <Input
-                    type="number"
-                    value={formData.decelerations}
-                    onChange={(e) => setFormData({ ...formData, decelerations: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-3">Possession & Defensive</h4>
-              <div className="grid grid-cols-4 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Possession Won</Label>
-                  <Input
-                    type="number"
-                    value={formData.possessionWon}
-                    onChange={(e) => setFormData({ ...formData, possessionWon: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Possession Lost</Label>
-                  <Input
-                    type="number"
-                    value={formData.possessionLost}
-                    onChange={(e) => setFormData({ ...formData, possessionLost: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Interceptions</Label>
-                  <Input
-                    type="number"
-                    value={formData.interceptions}
-                    onChange={(e) => setFormData({ ...formData, interceptions: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Tackles</Label>
-                  <Input
-                    type="number"
-                    value={formData.tackles}
-                    onChange={(e) => setFormData({ ...formData, tackles: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-3">Overall Scores (0-100)</h4>
-              <div className="grid grid-cols-4 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Technical</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.technicalScore}
-                    onChange={(e) => setFormData({ ...formData, technicalScore: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Physical</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.physicalScore}
-                    onChange={(e) => setFormData({ ...formData, physicalScore: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Tactical</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.tacticalScore}
-                    onChange={(e) => setFormData({ ...formData, tacticalScore: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Overall</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.overallScore}
-                    onChange={(e) => setFormData({ ...formData, overallScore: e.target.value })}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Additional observations..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createMetric.isPending}>
-              {createMetric.isPending ? 'Saving...' : 'Save Performance'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export default function Performance() {
-  const { user } = useAuth();
-  const { selectedChildId } = useParentChild();
-  const [selectedPlayer, setSelectedPlayer] = useState<string>('');
-  
-  // For parents, get their linked children; for staff, get all players
-  const { data: players } = user?.role === 'parent' 
-    ? trpc.parentRelations.getLinkedPlayers.useQuery()
-    : trpc.players.getAll.useQuery();
-  
-  // Auto-select child for parents
-  useEffect(() => {
-    if (user?.role === 'parent' && selectedChildId && !selectedPlayer) {
-      setSelectedPlayer(selectedChildId);
-    }
-  }, [user, selectedChildId, selectedPlayer]);
-  
-  const { data: metrics } = trpc.performance.getPlayerMetrics.useQuery(
-    { playerId: parseInt(selectedPlayer), limit: 10 },
-    { enabled: !!selectedPlayer }
-  );
-
-  const [selectedMetricId, setSelectedMetricId] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (metrics && metrics.length > 0 && selectedMetricId === null) {
-      setSelectedMetricId(metrics[0].id);
-    } else if (metrics && metrics.length > 0 && !metrics.find(m => m.id === selectedMetricId)) {
-        // If selected ID is no longer in the list (e.g. switched player), reset to first
-        setSelectedMetricId(metrics[0].id);
-    } else if (!metrics || metrics.length === 0) {
-        setSelectedMetricId(null);
-    }
-  }, [metrics, selectedMetricId]);
-
-  const currentMetric = metrics?.find(m => m.id === selectedMetricId) || metrics?.[0];
+  const averageSkillScore = Math.round(skills.reduce((sum, s) => sum + s.value, 0) / skills.length);
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Performance Tracking</h1>
-            <p className="text-muted-foreground">
-              Monitor and analyze player performance metrics
-            </p>
+            <h1 className="text-3xl font-bold">Performance & Skills</h1>
+            <p className="text-muted-foreground">Track session performance and rate player skills</p>
           </div>
-          <RecordPerformanceDialog preselectedPlayerId={selectedPlayer} />
         </div>
 
         {/* Player Selection */}
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
-              <Label className="whitespace-nowrap">Select Player:</Label>
-              <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
-                <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Choose a player to view" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Select Team & Player
+            </CardTitle>
+            <CardDescription>
+              First select a team, then choose a player to track their performance
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Team Selection */}
+            <div>
+              <Label htmlFor="team-select" className="text-sm font-medium mb-2 block">
+                Team
+              </Label>
+              <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                <SelectTrigger id="team-select" className="w-full md:w-96">
+                  <SelectValue placeholder="Select a team..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {players?.map((player: any) => (
-                    <SelectItem key={player.id} value={player.id.toString()}>
-                      {player.firstName} {player.lastName}
-                    </SelectItem>
-                  ))}
+                  {teamsLoading ? (
+                    <SelectItem value="loading" disabled>Loading teams...</SelectItem>
+                  ) : teams && teams.length > 0 ? (
+                    teams.map((team: any) => (
+                      <SelectItem key={team.id} value={team.id.toString()}>
+                        {team.name} - {team.ageGroup || "No age group"}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No teams found</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Player Selection */}
+            <div>
+              <Label htmlFor="player-select" className="text-sm font-medium mb-2 block">
+                Player
+              </Label>
+              <Select 
+                value={selectedPlayerId} 
+                onValueChange={setSelectedPlayerId}
+                disabled={!selectedTeamId}
+              >
+                <SelectTrigger id="player-select" className="w-full md:w-96">
+                  <SelectValue placeholder={selectedTeamId ? "Select a player..." : "Select a team first..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {playersLoading ? (
+                    <SelectItem value="loading" disabled>Loading players...</SelectItem>
+                  ) : filteredPlayers && filteredPlayers.length > 0 ? (
+                    filteredPlayers.map((player: any) => (
+                      <SelectItem key={player.id} value={player.id.toString()}>
+                        {player.firstName} {player.lastName} - {player.position || "No position"}
+                      </SelectItem>
+                    ))
+                  ) : selectedTeamId ? (
+                    <SelectItem value="none" disabled>No players in this team</SelectItem>
+                  ) : (
+                    <SelectItem value="none" disabled>Select a team first</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedPlayer && (
+              <div className="flex items-center gap-4 mt-4 p-4 bg-muted/50 rounded-lg">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                  {selectedPlayer.firstName?.[0]}{selectedPlayer.lastName?.[0]}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold">
+                    {selectedPlayer.firstName} {selectedPlayer.lastName}
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Badge variant="outline">
+                      {selectedPlayer.position || "No position"}
+                    </Badge>
+                    <span>•</span>
+                    <span>{selectedPlayer.ageGroup || "No age group"}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold">{averageSkillScore}</div>
+                  <div className={`text-sm ${getScoreLabel(averageSkillScore).color}`}>
+                    {getScoreLabel(averageSkillScore).label}
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {selectedPlayer && currentMetric ? (
-          <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="technical">Technical</TabsTrigger>
-              <TabsTrigger value="physical">Physical</TabsTrigger>
-              <TabsTrigger value="history">History</TabsTrigger>
+        {selectedPlayerId ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="skills">Skill Assessment</TabsTrigger>
+              <TabsTrigger value="performance">Session Performance</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-6">
-              {/* Score Cards */}
-              <div className="grid gap-4 md:grid-cols-4">
-                <Card className="stat-glow">
-                  <CardContent className="p-6 text-center">
-                    <div className="text-5xl font-bold text-primary mb-2">
-                      {currentMetric.overallScore || '--'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Overall Score</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6 text-center">
-                    <div className="text-4xl font-bold text-chart-1 mb-2">
-                      {currentMetric.technicalScore || '--'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Technical</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6 text-center">
-                    <div className="text-4xl font-bold text-chart-2 mb-2">
-                      {currentMetric.physicalScore || '--'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Physical</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-6 text-center">
-                    <div className="text-4xl font-bold text-chart-3 mb-2">
-                      {currentMetric.tacticalScore || '--'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Tactical</div>
-                  </CardContent>
-                </Card>
+            {/* SKILL ASSESSMENT TAB */}
+            <TabsContent value="skills" className="space-y-6">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  onClick={() => {
+                    if (!selectedPlayer) return;
+                    exportSkillAssessmentPDF({
+                      playerName: `${selectedPlayer.firstName} ${selectedPlayer.lastName}`,
+                      date: new Date().toISOString().split('T')[0],
+                      skills: skills.map(s => ({ name: s.name, value: s.value })),
+                      overallRating: averageSkillScore,
+                      coachNotes: skillNotes || undefined,
+                    });
+                  }}
+                  variant="outline"
+                >
+                  <FileDown className="w-4 h-4 mr-2" />
+                  Export PDF
+                </Button>
+                <Button
+                  onClick={handleSaveSkills}
+                  disabled={saveSkillsMutation.isPending}
+                >
+                  {saveSkillsMutation.isPending ? (
+                    <>Saving...</>
+                  ) : saveSkillSuccess ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Saved!
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Assessment
+                    </>
+                  )}
+                </Button>
               </div>
 
-              {/* Latest Session Info */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Session Details</CardTitle>
-                  <CardDescription>
-                    {currentMetric.sessionType} on {new Date(currentMetric.sessionDate).toLocaleDateString()}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-                    <MetricCard
-                      label="Touches"
-                      value={currentMetric.touches || 0}
-                      icon={Footprints}
-                      color="primary"
-                    />
-                    <MetricCard
-                      label="Passes"
-                      value={currentMetric.passes || 0}
-                      icon={Activity}
-                      color="chart-2"
-                    />
-                    <MetricCard
-                      label="Pass Accuracy"
-                      value={currentMetric.passAccuracy || 0}
-                      unit="%"
-                      icon={Target}
-                      color="chart-3"
-                    />
-                    <MetricCard
-                      label="Distance"
-                      value={currentMetric.distanceCovered || 0}
-                      unit="km"
-                      icon={TrendingUp}
-                      color="chart-4"
-                    />
-                    <MetricCard
-                      label="Top Speed"
-                      value={currentMetric.topSpeed || 0}
-                      unit="km/h"
-                      icon={Zap}
-                      color="accent"
-                    />
-                    <MetricCard
-                      label="Sprints"
-                      value={currentMetric.sprints || 0}
-                      icon={Timer}
-                      color="primary"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Skill Sliders */}
+                <div className="lg:col-span-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Star className="w-5 h-5" />
+                        Skill Ratings
+                      </CardTitle>
+                      <CardDescription>
+                        Drag sliders to rate each skill from 0-100
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {skills.map((skill) => {
+                        const scoreInfo = getScoreLabel(skill.value);
+                        return (
+                          <div key={skill.key} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={`p-2 rounded-lg ${skill.color}`}>
+                                  <skill.icon className="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                  <span className="font-medium">{skill.name}</span>
+                                  <p className="text-xs text-muted-foreground">{skill.description}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-2xl font-bold">{skill.value}</span>
+                                <span className={`block text-xs ${scoreInfo.color}`}>{scoreInfo.label}</span>
+                              </div>
+                            </div>
+                            <Slider
+                              value={[skill.value]}
+                              onValueChange={([v]) => updateSkill(skill.key, v)}
+                              max={100}
+                              step={1}
+                              className="w-full"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>0</span>
+                              <span>25</span>
+                              <span>50</span>
+                              <span>75</span>
+                              <span>100</span>
+                            </div>
+                          </div>
+                        );
+                      })}
 
-            <TabsContent value="technical" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Technical Metrics</CardTitle>
-                  <CardDescription>Ball control, passing, and shooting analysis</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Ball Control</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Touches</span>
-                          <span className="font-medium">{currentMetric.touches || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Dribbles Attempted</span>
-                          <span className="font-medium">{currentMetric.dribbles || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Successful Dribbles</span>
-                          <span className="font-medium">{currentMetric.successfulDribbles || 0}</span>
-                        </div>
+                      {/* Notes */}
+                      <div className="pt-4 border-t">
+                        <label className="block font-medium mb-2">Coach Notes</label>
+                        <Textarea
+                          value={skillNotes}
+                          onChange={(e) => setSkillNotes(e.target.value)}
+                          placeholder="Add any observations, recommendations, or areas to focus on..."
+                          className="min-h-[100px]"
+                        />
                       </div>
-                    </div>
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Passing</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Total Passes</span>
-                          <span className="font-medium">{currentMetric.passes || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Pass Accuracy</span>
-                          <span className="font-medium">{currentMetric.passAccuracy || 0}%</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Shooting</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Shots</span>
-                          <span className="font-medium">{currentMetric.shots || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Shots on Target</span>
-                          <span className="font-medium">{currentMetric.shotsOnTarget || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Shot Accuracy</span>
-                          <span className="font-medium">
-                            {currentMetric.shots ? Math.round((currentMetric.shotsOnTarget || 0) / currentMetric.shots * 100) : 0}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Defensive</h4>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Interceptions</span>
-                          <span className="font-medium">{currentMetric.interceptions || 0}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">Tackles</span>
-                          <span className="font-medium">{currentMetric.tackles || 0}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                    </CardContent>
+                  </Card>
+                </div>
 
-            <TabsContent value="physical" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Physical Metrics</CardTitle>
-                  <CardDescription>Movement, speed, and endurance data</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <MetricCard
-                      label="Distance Covered"
-                      value={currentMetric.distanceCovered || 0}
-                      unit="km"
-                      icon={TrendingUp}
-                      color="primary"
-                    />
-                    <MetricCard
-                      label="Top Speed"
-                      value={currentMetric.topSpeed || 0}
-                      unit="km/h"
-                      icon={Zap}
-                      color="chart-2"
-                    />
-                    <MetricCard
-                      label="Sprints"
-                      value={currentMetric.sprints || 0}
-                      icon={Timer}
-                      color="chart-3"
-                    />
-                    <MetricCard
-                      label="Accelerations"
-                      value={currentMetric.accelerations || 0}
-                      icon={Activity}
-                      color="chart-4"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                {/* Skill Summary & History */}
+                <div className="space-y-6">
+                  {/* Skill Overview */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5" />
+                        Skill Overview
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {skills.map((skill) => (
+                          <div key={skill.key} className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${skill.color} flex items-center justify-center`}>
+                              <skill.icon className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-muted-foreground">{skill.name}</span>
+                                <span className="font-medium">{skill.value}</span>
+                              </div>
+                              <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${skill.color} transition-all duration-300`}
+                                  style={{ width: `${skill.value}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-            <TabsContent value="history" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Performance History</CardTitle>
-                  <CardDescription>Recent session records</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {metrics?.map((metric, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setSelectedMetricId(metric.id)}
-                        className={`w-full flex items-center gap-4 p-4 rounded-lg transition-colors text-left ${
-                          metric.id === selectedMetricId ? 'bg-primary/20 ring-2 ring-primary' : 'bg-muted/50 hover:bg-muted'
-                        }`}
-                      >
-                        <div className="text-center min-w-[80px]">
-                          <div className="text-2xl font-bold text-primary">{metric.overallScore || '--'}</div>
-                          <div className="text-xs text-muted-foreground">Overall</div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium capitalize">{metric.sessionType}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(metric.sessionDate).toLocaleDateString()}
+                      <div className="mt-6 pt-4 border-t">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Overall Rating</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-3xl font-bold">{averageSkillScore}</span>
+                            <span className={`text-sm ${getScoreLabel(averageSkillScore).color}`}>
+                              {getScoreLabel(averageSkillScore).label}
                             </span>
                           </div>
-                          <div className="flex gap-4 text-sm text-muted-foreground">
-                            <span>Tech: {metric.technicalScore || '--'}</span>
-                            <span>Phys: {metric.physicalScore || '--'}</span>
-                            <span>Tact: {metric.tacticalScore || '--'}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Assessment History */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <History className="w-5 h-5" />
+                        Recent Assessments
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {skillHistory && skillHistory.length > 0 ? (
+                        <div className="space-y-3">
+                          {skillHistory.slice(0, 5).map((record: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+                              <div>
+                                <div className="font-medium capitalize">{record.skillName?.replace(/([A-Z])/g, ' $1').trim()}</div>
+                                <div className="text-muted-foreground text-xs">
+                                  {new Date(record.recordedAt).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <Badge className={record.score >= 70 ? "bg-green-600" : record.score >= 50 ? "bg-yellow-600" : "bg-red-600"}>
+                                {record.score}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p>No previous assessments</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* PERFORMANCE TAB */}
+            <TabsContent value="performance" className="space-y-6">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  onClick={handleSavePerformance}
+                  disabled={savePerformanceMutation.isPending}
+                >
+                  {savePerformanceMutation.isPending ? (
+                    <>Saving...</>
+                  ) : savePerformanceSuccess ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Saved!
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Record Performance
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Performance Inputs */}
+                <div className="lg:col-span-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Activity className="w-5 h-5" />
+                        Session Metrics
+                      </CardTitle>
+                      <CardDescription>
+                        Enter performance data from training or match sessions
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      {/* Session Info */}
+                      <div className="grid grid-cols-2 gap-4 pb-4 border-b">
+                        <div className="space-y-2">
+                          <Label>Session Type</Label>
+                          <Select value={sessionType} onValueChange={setSessionType}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="training">Training</SelectItem>
+                              <SelectItem value="match">Match</SelectItem>
+                              <SelectItem value="assessment">Assessment</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Session Date</Label>
+                          <Input
+                            type="date"
+                            value={sessionDate}
+                            onChange={(e) => setSessionDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Metrics */}
+                      {performanceMetrics.map((metric) => (
+                        <div key={metric.key} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className={`p-2 rounded-lg ${metric.color}`}>
+                                <metric.icon className="w-4 h-4 text-white" />
+                              </div>
+                              <div>
+                                <span className="font-medium">{metric.name}</span>
+                                <p className="text-xs text-muted-foreground">{metric.description}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                value={metric.value || ''}
+                                onChange={(e) => updatePerformanceMetric(metric.key, parseFloat(e.target.value) || 0)}
+                                className="w-24 text-right"
+                                placeholder="0"
+                              />
+                              {metric.unit && <span className="text-sm text-muted-foreground w-12">{metric.unit}</span>}
+                            </div>
                           </div>
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+
+                      {/* Notes */}
+                      <div className="pt-4 border-t">
+                        <label className="block font-medium mb-2">Session Notes</label>
+                        <Textarea
+                          value={performanceNotes}
+                          onChange={(e) => setPerformanceNotes(e.target.value)}
+                          placeholder="Add any observations about the session..."
+                          className="min-h-[100px]"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Performance History */}
+                <div className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <History className="w-5 h-5" />
+                        Recent Sessions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {performanceHistory && performanceHistory.length > 0 ? (
+                        <div className="space-y-3">
+                          {performanceHistory.slice(0, 5).map((record: any, idx: number) => (
+                            <div key={idx} className="p-3 bg-secondary/50 rounded-lg">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge variant="outline" className="capitalize">{record.sessionType}</Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(record.sessionDate).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Passes:</span>
+                                  <span className="ml-1 font-medium">{record.passes || '--'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Shots:</span>
+                                  <span className="ml-1 font-medium">{record.shots || '--'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Dist:</span>
+                                  <span className="ml-1 font-medium">{record.distanceCovered || '--'}km</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p>No previous sessions</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
-        ) : selectedPlayer ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No performance data</h3>
-              <p className="text-muted-foreground mb-4">
-                Start recording performance metrics for this player
-              </p>
-              <RecordPerformanceDialog preselectedPlayerId={selectedPlayer} />
-            </CardContent>
-          </Card>
         ) : (
           <Card>
-            <CardContent className="p-12 text-center">
-              <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Select a Player</h3>
-              <p className="text-muted-foreground">
-                Choose a player from the dropdown above to view their performance data
-              </p>
+            <CardContent className="py-12 text-center">
+              <User className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-xl font-semibold mb-2">Select a Player</h3>
+              <p className="text-muted-foreground">Choose a player from the dropdown above to start tracking their performance</p>
             </CardContent>
           </Card>
         )}

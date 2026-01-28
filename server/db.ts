@@ -492,6 +492,83 @@ export async function getLatestPerformanceMetric(playerId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getTeamPerformanceAverages(teamId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  // Get all players in the team
+  const teamPlayers = await db.select().from(players).where(eq(players.teamId, teamId));
+  const playerIds = teamPlayers.map(p => p.id);
+  
+  if (playerIds.length === 0) return null;
+  
+  // Get latest performance metric for each player
+  const metrics = await db.select().from(performanceMetrics)
+    .where(inArray(performanceMetrics.playerId, playerIds))
+    .orderBy(desc(performanceMetrics.sessionDate));
+  
+  if (metrics.length === 0) return null;
+  
+  // Calculate averages
+  const sum = metrics.reduce((acc, m) => ({
+    touches: acc.touches + (m.touches || 0),
+    passes: acc.passes + (m.passes || 0),
+    passAccuracy: acc.passAccuracy + (m.passAccuracy || 0),
+    shots: acc.shots + (m.shots || 0),
+    shotsOnTarget: acc.shotsOnTarget + (m.shotsOnTarget || 0),
+    dribbles: acc.dribbles + (m.dribbles || 0),
+    successfulDribbles: acc.successfulDribbles + (m.successfulDribbles || 0),
+    distanceCovered: acc.distanceCovered + (m.distanceCovered || 0),
+    topSpeed: acc.topSpeed + (m.topSpeed || 0),
+    sprints: acc.sprints + (m.sprints || 0),
+    accelerations: acc.accelerations + (m.accelerations || 0),
+    decelerations: acc.decelerations + (m.decelerations || 0),
+    possessionWon: acc.possessionWon + (m.possessionWon || 0),
+    possessionLost: acc.possessionLost + (m.possessionLost || 0),
+    interceptions: acc.interceptions + (m.interceptions || 0),
+    tackles: acc.tackles + (m.tackles || 0),
+    technicalScore: acc.technicalScore + (m.technicalScore || 0),
+    physicalScore: acc.physicalScore + (m.physicalScore || 0),
+    tacticalScore: acc.tacticalScore + (m.tacticalScore || 0),
+    mentalScore: acc.mentalScore + (m.mentalScore || 0),
+    overallScore: acc.overallScore + (m.overallScore || 0),
+  }), {
+    touches: 0, passes: 0, passAccuracy: 0, shots: 0, shotsOnTarget: 0,
+    dribbles: 0, successfulDribbles: 0, distanceCovered: 0, topSpeed: 0,
+    sprints: 0, accelerations: 0, decelerations: 0, possessionWon: 0,
+    possessionLost: 0, interceptions: 0, tackles: 0, technicalScore: 0,
+    physicalScore: 0, tacticalScore: 0, mentalScore: 0, overallScore: 0,
+  });
+  
+  const count = metrics.length;
+  
+  return {
+    touches: Math.round(sum.touches / count),
+    passes: Math.round(sum.passes / count),
+    passAccuracy: Math.round(sum.passAccuracy / count),
+    shots: Math.round(sum.shots / count),
+    shotsOnTarget: Math.round(sum.shotsOnTarget / count),
+    dribbles: Math.round(sum.dribbles / count),
+    successfulDribbles: Math.round(sum.successfulDribbles / count),
+    distanceCovered: parseFloat((sum.distanceCovered / count).toFixed(2)),
+    topSpeed: parseFloat((sum.topSpeed / count).toFixed(2)),
+    sprints: Math.round(sum.sprints / count),
+    accelerations: Math.round(sum.accelerations / count),
+    decelerations: Math.round(sum.decelerations / count),
+    possessionWon: Math.round(sum.possessionWon / count),
+    possessionLost: Math.round(sum.possessionLost / count),
+    interceptions: Math.round(sum.interceptions / count),
+    tackles: Math.round(sum.tackles / count),
+    technicalScore: Math.round(sum.technicalScore / count),
+    physicalScore: Math.round(sum.physicalScore / count),
+    tacticalScore: Math.round(sum.tacticalScore / count),
+    mentalScore: Math.round(sum.mentalScore / count),
+    overallScore: Math.round(sum.overallScore / count),
+    sessionType: 'team_average' as const,
+    sessionDate: new Date(),
+  };
+}
+
 // ==================== MENTAL ASSESSMENT FUNCTIONS ====================
 
 export async function createMentalAssessment(assessment: InsertMentalAssessment) {
@@ -642,15 +719,29 @@ export async function getTeamTrainingSessions(teamId: number) {
 export async function getUpcomingTrainingSessions(teamId?: number) {
   const db = await getDb();
   if (!db) return [];
-  const today = new Date().toISOString().split('T')[0];
+  
+  // Use start of today in UTC to avoid timezone issues
+  // Sessions stored as dates should be compared at the date level, not datetime
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // Go back one day to account for timezone shifts
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  console.log('[DB] getUpcomingTrainingSessions - teamId:', teamId, 'comparing from:', yesterday.toISOString());
+  
   if (teamId) {
-    return db.select().from(trainingSessions)
-      .where(and(eq(trainingSessions.teamId, teamId), gte(trainingSessions.sessionDate, new Date(today))))
+    const sessions = await db.select().from(trainingSessions)
+      .where(and(eq(trainingSessions.teamId, teamId), gte(trainingSessions.sessionDate, yesterday)))
       .orderBy(trainingSessions.sessionDate);
+    console.log('[DB] Found sessions for team:', sessions.length);
+    return sessions;
   }
-  return db.select().from(trainingSessions)
-    .where(gte(trainingSessions.sessionDate, new Date(today)))
+  const sessions = await db.select().from(trainingSessions)
+    .where(gte(trainingSessions.sessionDate, yesterday))
     .orderBy(trainingSessions.sessionDate);
+  console.log('[DB] Found all sessions:', sessions.length);
+  return sessions;
 }
 
 export async function updateTrainingSession(id: number, data: Partial<InsertTrainingSession>) {
@@ -1030,7 +1121,35 @@ export async function getMatchesByTeam(teamId: number) {
 export async function getAllMatches() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(matches).orderBy(desc(matches.matchDate));
+  
+  // Join with man_of_the_match table to include MOTM data
+  const results = await db
+    .select({
+      id: matches.id,
+      teamId: matches.teamId,
+      matchDate: matches.matchDate,
+      matchType: matches.matchType,
+      opponent: matches.opponent,
+      venue: matches.venue,
+      isHome: matches.isHome,
+      teamScore: matches.teamScore,
+      opponentScore: matches.opponentScore,
+      result: matches.result,
+      halfTimeScore: matches.halfTimeScore,
+      notes: matches.notes,
+      videoUrl: matches.videoUrl,
+      createdBy: matches.createdBy,
+      createdAt: matches.createdAt,
+      updatedAt: matches.updatedAt,
+      motmPlayerId: manOfTheMatch.playerId,
+      motmRating: manOfTheMatch.rating,
+      motmReason: manOfTheMatch.reason,
+    })
+    .from(matches)
+    .leftJoin(manOfTheMatch, eq(matches.id, manOfTheMatch.matchId))
+    .orderBy(desc(matches.matchDate));
+    
+  return results;
 }
 
 export async function updateMatch(id: number, data: Partial<InsertMatch>) {
@@ -2391,8 +2510,25 @@ export async function getAllPrivateTrainingBookings() {
   const db = await getDb();
   if (!db) return [];
   return db
-    .select()
+    .select({
+      id: privateTrainingBookings.id,
+      playerId: privateTrainingBookings.playerId,
+      playerName: sql<string>`CONCAT(${players.firstName}, ' ', ${players.lastName})`,
+      coachId: privateTrainingBookings.coachId,
+      coachName: users.name,
+      sessionDate: privateTrainingBookings.sessionDate,
+      startTime: privateTrainingBookings.startTime,
+      endTime: privateTrainingBookings.endTime,
+      totalPrice: privateTrainingBookings.totalPrice,
+      status: privateTrainingBookings.status,
+      notes: privateTrainingBookings.notes,
+      locationId: privateTrainingBookings.locationId,
+      locationName: trainingLocations.name,
+    })
     .from(privateTrainingBookings)
+    .leftJoin(players, eq(privateTrainingBookings.playerId, players.id))
+    .leftJoin(users, eq(privateTrainingBookings.coachId, users.id))
+    .leftJoin(trainingLocations, eq(privateTrainingBookings.locationId, trainingLocations.id))
     .orderBy(desc(privateTrainingBookings.sessionDate));
 }
 
@@ -3109,6 +3245,14 @@ export async function deleteFormation(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(formations).where(eq(formations.id, id));
+}
+
+export async function getUserFormations(userId: number): Promise<Formation[]> {
+  const db = await getDb();
+  if (!db) return [];
+  // Return all formations (available to all teams)
+  return db.select().from(formations)
+    .orderBy(desc(formations.createdAt));
 }
 
 // ==================== SET PIECES ====================

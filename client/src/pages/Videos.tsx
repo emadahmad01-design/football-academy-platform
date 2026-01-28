@@ -27,6 +27,7 @@ export default function Videos() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
 
   const { data: videos, isLoading, refetch } = trpc.videos.getAll.useQuery();
   const { data: players } = trpc.players.getAll.useQuery();
@@ -148,7 +149,7 @@ export default function Videos() {
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[10001]">
                         <SelectItem value="training_clip">Training Clip</SelectItem>
                         <SelectItem value="match_highlight">Match Highlight</SelectItem>
                         <SelectItem value="skill_demo">Skill Demo</SelectItem>
@@ -178,7 +179,7 @@ export default function Videos() {
                       <SelectTrigger>
                         <SelectValue placeholder="Select player" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[10001]">
                         {players?.map((player) => (
                           <SelectItem key={player.id} value={player.id.toString()}>
                             {player.firstName} {player.lastName}
@@ -196,7 +197,7 @@ export default function Videos() {
                       <SelectTrigger>
                         <SelectValue placeholder="Select match" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-[10001]">
                         {matches?.map((match) => (
                           <SelectItem key={match.id} value={match.id.toString()}>
                             vs {match.opponent} ({new Date(match.matchDate).toLocaleDateString()})
@@ -237,7 +238,11 @@ export default function Videos() {
         ) : videos && videos.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {videos.map((video) => (
-              <Card key={video.id} className="overflow-hidden group cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
+              <Card 
+                key={video.id} 
+                className="overflow-hidden group cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                onClick={() => setSelectedVideo(video)}
+              >
                 {/* Thumbnail */}
                 <div className="relative aspect-video bg-muted">
                   {video.thumbnailUrl ? (
@@ -311,6 +316,36 @@ export default function Videos() {
             </CardContent>
           </Card>
         )}
+
+        {/* Video Player Dialog */}
+        <Dialog open={!!selectedVideo} onOpenChange={() => setSelectedVideo(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>{selectedVideo?.title}</DialogTitle>
+              <DialogDescription>
+                {selectedVideo && getVideoTypeBadge(selectedVideo.videoType)}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="aspect-video w-full">
+              <iframe
+                src={selectedVideo?.videoUrl}
+                className="w-full h-full rounded-lg"
+                allowFullScreen
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            </div>
+            {selectedVideo?.tags && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {JSON.parse(selectedVideo.tags).map((tag: string, i: number) => (
+                  <Badge key={i} variant="outline">
+                    <Tag className="h-3 w-3 mr-1" />
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -855,11 +855,44 @@ export default function ProfessionalTacticalBoard() {
         ],
         roles: ['Defender', 'Midfielder', 'Forward']
       },
+      '4-2-3-1': {
+        positions: [
+          [-18, -9, 9, 18],
+          [-10, 10],
+          [-15, 0, 15],
+          [0]
+        ],
+        roles: ['Defender', 'Midfielder', 'Midfielder', 'Forward']
+      },
       '4-3-3': {
         positions: [
           [-18, -9, 9, 18],
           [-12, 0, 12],
           [-15, 0, 15]
+        ],
+        roles: ['Defender', 'Midfielder', 'Forward']
+      },
+      '3-5-2': {
+        positions: [
+          [-15, 0, 15],
+          [-18, -9, 0, 9, 18],
+          [-10, 10]
+        ],
+        roles: ['Defender', 'Midfielder', 'Forward']
+      },
+      '3-4-3': {
+        positions: [
+          [-15, 0, 15],
+          [-18, -6, 6, 18],
+          [-15, 0, 15]
+        ],
+        roles: ['Defender', 'Midfielder', 'Forward']
+      },
+      '5-3-2': {
+        positions: [
+          [-20, -10, 0, 10, 20],
+          [-12, 0, 12],
+          [-10, 10]
         ],
         roles: ['Defender', 'Midfielder', 'Forward']
       },
@@ -1617,8 +1650,12 @@ export default function ProfessionalTacticalBoard() {
                       value={homeFormation}
                       onChange={(e) => setHomeFormation(e.target.value)}
                     >
-                      <option value="4-4-2">4-4-2</option>
+                      <option value="4-2-3-1">4-2-3-1</option>
                       <option value="4-3-3">4-3-3</option>
+                      <option value="4-4-2">4-4-2</option>
+                      <option value="3-5-2">3-5-2</option>
+                      <option value="3-4-3">3-4-3</option>
+                      <option value="5-3-2">5-3-2</option>
                       <option value="5-4-1">5-4-1</option>
                     </select>
                   </div>
@@ -1632,8 +1669,12 @@ export default function ProfessionalTacticalBoard() {
                       value={awayFormation}
                       onChange={(e) => setAwayFormation(e.target.value)}
                     >
+                      <option value="4-2-3-1">4-2-3-1</option>
                       <option value="4-3-3">4-3-3</option>
                       <option value="4-4-2">4-4-2</option>
+                      <option value="3-5-2">3-5-2</option>
+                      <option value="3-4-3">3-4-3</option>
+                      <option value="5-3-2">5-3-2</option>
                       <option value="5-4-1">5-4-1</option>
                     </select>
                   </div>

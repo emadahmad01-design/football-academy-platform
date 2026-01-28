@@ -1,0 +1,1 @@
+ALTER TABLE `performance_metrics` ADD `mentalScore` int DEFAULT 0;

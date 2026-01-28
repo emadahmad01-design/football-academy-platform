@@ -2,7 +2,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import NotificationBell from "@/components/NotificationBell";
 import { useParentChild } from "@/contexts/ParentChildContext";
 import { ChildSelector } from "@/components/ChildSelector";
-import { TeamSwitcher } from "@/components/TeamSwitcher";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -72,7 +71,8 @@ import {
   Home,
   Globe,
   Compass,
-  Star
+  Star,
+  Clock
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -84,17 +84,7 @@ import { AIChatWidget } from "./AIChatWidget";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 
-// Define the team-specific items that appear in both Main Team and Academy Team modules
-const getTeamModuleItems = (language: string, teamPrefix: string) => [
-  { icon: Users, label: language === 'ar' ? 'اللاعبين' : 'Players', path: `/${teamPrefix}/players` },
-  { icon: Activity, label: language === 'ar' ? 'الأداء' : 'Performance', path: `/${teamPrefix}/performance` },
-  { icon: Calendar, label: language === 'ar' ? 'التدريب' : 'Training', path: `/${teamPrefix}/training` },
-  { icon: Swords, label: language === 'ar' ? 'المباريات' : 'Matches', path: `/${teamPrefix}/matches` },
-  { icon: Video, label: language === 'ar' ? 'الفيديو' : 'Videos', path: `/${teamPrefix}/videos` },
-  { icon: BarChart3, label: language === 'ar' ? 'التحليلات' : 'Analytics', path: `/${teamPrefix}/analytics` },
-];
-
-// Module-based navigation structure
+// Module-based navigation structure - Clean architecture without duplication
 const getModules = (t: (key: string) => string, language: string, userTeamType?: string | null) => {
   const baseModules = [
     {
@@ -106,50 +96,13 @@ const getModules = (t: (key: string) => string, language: string, userTeamType?:
         { icon: Trophy, label: language === 'ar' ? 'لوحة المدرب' : 'Coach Dashboard', path: '/coach-dashboard' },
       ]
     },
-    // Main Team Module
-    {
-      id: 'main-team',
-      label: language === 'ar' ? 'الفريق الأول' : 'Main Team',
-      icon: Trophy,
-      teamType: 'main',
-      items: [
-        { icon: LayoutDashboard, label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', path: '/team-dashboard?team=main' },
-        { icon: Users, label: language === 'ar' ? 'اللاعبين' : 'Players', path: '/players?team=main' },
-        { icon: Activity, label: language === 'ar' ? 'الأداء' : 'Performance', path: '/performance?team=main' },
-        { icon: Calendar, label: language === 'ar' ? 'التدريب' : 'Training', path: '/training?team=main' },
-        { icon: Swords, label: language === 'ar' ? 'المباريات' : 'Matches', path: '/matches?team=main' },
-        { icon: Video, label: language === 'ar' ? 'الفيديو' : 'Videos', path: '/videos?team=main' },
-        { icon: BarChart3, label: language === 'ar' ? 'التحليلات' : 'Analytics', path: '/analytics?team=main' },
-        { icon: Target, label: language === 'ar' ? 'التكتيكات' : 'Tactics', path: '/professional-tactical-board?team=main' },
-        { icon: Brain, label: language === 'ar' ? 'أدوات AI' : 'AI Tools', path: '/ai-coach?team=main' },
-      ]
-    },
-    // Academy Team Module
-    {
-      id: 'academy-team',
-      label: language === 'ar' ? 'فريق الأكاديمية' : 'Academy Team',
-      icon: Shield,
-      teamType: 'academy',
-      items: [
-        { icon: LayoutDashboard, label: language === 'ar' ? 'لوحة التحكم' : 'Dashboard', path: '/team-dashboard?team=academy' },
-        { icon: Users, label: language === 'ar' ? 'اللاعبين' : 'Players', path: '/players?team=academy' },
-        { icon: Activity, label: language === 'ar' ? 'الأداء' : 'Performance', path: '/performance?team=academy' },
-        { icon: Calendar, label: language === 'ar' ? 'التدريب' : 'Training', path: '/training?team=academy' },
-        { icon: Swords, label: language === 'ar' ? 'المباريات' : 'Matches', path: '/matches?team=academy' },
-        { icon: Video, label: language === 'ar' ? 'الفيديو' : 'Videos', path: '/videos?team=academy' },
-        { icon: BarChart3, label: language === 'ar' ? 'التحليلات' : 'Analytics', path: '/analytics?team=academy' },
-        { icon: Target, label: language === 'ar' ? 'التكتيكات' : 'Tactics', path: '/professional-tactical-board?team=academy' },
-        { icon: Brain, label: language === 'ar' ? 'أدوات AI' : 'AI Tools', path: '/ai-coach?team=academy' },
-      ]
-    },
     {
       id: 'players',
-      label: language === 'ar' ? 'إدارة اللاعبين' : 'Player Management',
+      label: language === 'ar' ? 'اللاعبين' : 'Players',
       icon: Users,
       items: [
-        { icon: Users, label: language === 'ar' ? 'جميع اللاعبين' : 'All Players', path: '/players' },
-        { icon: Activity, label: language === 'ar' ? 'الأداء' : 'Performance', path: '/performance' },
-        { icon: ClipboardList, label: language === 'ar' ? 'تقييم المهارات' : 'Skill Assessment', path: '/skill-assessment' },
+        { icon: Users, label: language === 'ar' ? 'قائمة اللاعبين' : 'Player List', path: '/players' },
+        { icon: Activity, label: language === 'ar' ? 'الأداء والمهارات' : 'Performance & Skills', path: '/performance' },
         { icon: TrendingUp, label: language === 'ar' ? 'مقارنة اللاعبين' : 'Player Comparison', path: '/coach/player-comparison' },
       ]
     },
@@ -158,13 +111,11 @@ const getModules = (t: (key: string) => string, language: string, userTeamType?:
       label: language === 'ar' ? 'التدريب' : 'Training',
       icon: Calendar,
       items: [
-        { icon: Calendar, label: language === 'ar' ? 'التدريب' : 'Training', path: '/training' },
+        { icon: Calendar, label: language === 'ar' ? 'جدول التدريب' : 'Training Schedule', path: '/training' },
         { icon: BookOpen, label: language === 'ar' ? 'مكتبة التدريب' : 'Training Library', path: '/training-library' },
         { icon: Users, label: language === 'ar' ? 'التدريب الخاص' : 'Private Training', path: '/private-training' },
         { icon: Calendar, label: language === 'ar' ? 'حجوزاتي' : 'My Bookings', path: '/my-bookings' },
         { icon: Calendar, label: language === 'ar' ? 'التوفر' : 'Availability', path: '/coach-availability' },
-        { icon: Compass, label: language === 'ar' ? 'استكشف' : 'Explore', path: '/explore' },
-        { icon: Globe, label: language === 'ar' ? 'بوابة المواهب' : 'Talent Portal', path: '/talent-portal' },
       ]
     },
     {
@@ -266,6 +217,7 @@ const getModules = (t: (key: string) => string, language: string, userTeamType?:
         { icon: FileText, label: language === 'ar' ? 'محتوى الصفحة الرئيسية' : 'Home Content', path: '/admin/home-content' },
         { icon: Users2, label: language === 'ar' ? 'تعيين الفرق' : 'Team Assignment', path: '/admin/team-assignment' },
         { icon: Users, label: language === 'ar' ? 'تعيين المدربين' : 'Coach Assignment', path: '/admin/coach-assignment' },
+        { icon: Clock, label: language === 'ar' ? 'توفر المدربين' : 'Coach Availability', path: '/coach-availability' },
         { icon: Users2, label: language === 'ar' ? 'إدارة الفرق' : 'Team Management', path: '/admin/team-management' },
         { icon: Trophy, label: language === 'ar' ? 'قوائم الفرق' : 'Team Rosters', path: '/team-rosters' },
       ]
@@ -291,28 +243,16 @@ const getModulesForRole = (
     // Coach sees all except admin
     return allModules.filter(m => m.id !== 'admin');
   } else if (['nutritionist', 'mental_coach', 'physical_trainer'].includes(role)) {
-    // Staff sees limited modules plus both team modules
+    // Staff sees limited modules
     return allModules.filter(m => 
-      ['dashboard', 'main-team', 'academy-team', 'players', 'staff', 'community'].includes(m.id)
+      ['dashboard', 'players', 'staff', 'community'].includes(m.id)
     );
   } else if (role === 'parent') {
-    // Parent sees only their child's team module
-    if (userTeamType === 'main') {
-      return allModules.filter(m => ['dashboard', 'main-team', 'community'].includes(m.id));
-    } else if (userTeamType === 'academy') {
-      return allModules.filter(m => ['dashboard', 'academy-team', 'community'].includes(m.id));
-    }
-    // If no team assigned, show both
-    return allModules.filter(m => ['dashboard', 'main-team', 'academy-team', 'community'].includes(m.id));
+    // Parent sees dashboard, players, training, community
+    return allModules.filter(m => ['dashboard', 'players', 'training', 'community'].includes(m.id));
   } else if (role === 'player') {
-    // Player sees only their team module
-    if (userTeamType === 'main') {
-      return allModules.filter(m => ['dashboard', 'main-team', 'training', 'community'].includes(m.id));
-    } else if (userTeamType === 'academy') {
-      return allModules.filter(m => ['dashboard', 'academy-team', 'training', 'community'].includes(m.id));
-    }
-    // If no team assigned, show both
-    return allModules.filter(m => ['dashboard', 'main-team', 'academy-team', 'training', 'community'].includes(m.id));
+    // Player sees dashboard, players, training, matches, community
+    return allModules.filter(m => ['dashboard', 'players', 'training', 'matches', 'community'].includes(m.id));
   }
   
   return [allModules[0]]; // Dashboard only for unknown roles
@@ -589,7 +529,6 @@ export default function DashboardLayout({
           <header className="flex h-14 items-center gap-4 border-b bg-background px-4 lg:px-6">
             <SidebarTrigger />
             <div className="flex-1" />
-            {['coach', 'admin'].includes(user.role) && <TeamSwitcher />}
             <NotificationBell />
             {user.role === 'parent' && <ChildSelector />}
           </header>

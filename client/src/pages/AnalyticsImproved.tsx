@@ -94,13 +94,30 @@ export default function AnalyticsImproved() {
   const { data: teams } = trpc.teams.getAll.useQuery();
   const { data: performanceData } = trpc.performance.getAll.useQuery();
   
-  const allStats = performanceData || [];
+  // Get player IDs for the selected team
+  const teamPlayerIds = useMemo(() => {
+    if (!players || selectedTeam === 'all') return null;
+    return players
+      .filter(p => p.teamId === parseInt(selectedTeam))
+      .map(p => p.id);
+  }, [players, selectedTeam]);
+  
+  // Filter stats by selected team
+  const allStats = useMemo(() => {
+    if (!performanceData) return [];
+    if (selectedTeam === 'all' || !teamPlayerIds) return performanceData;
+    return performanceData.filter(stat => teamPlayerIds.includes(stat.playerId));
+  }, [performanceData, selectedTeam, teamPlayerIds]);
 
   // Calculate real performance trends from database
   const performanceTrendData = useMemo(() => {
     if (!allStats || allStats.length === 0) {
       return [];
     }
+
+    // Determine how many months to show based on timeRange
+    const monthsToShow = timeRange === '3months' ? 3 : 
+                        timeRange === '6months' ? 6 : 12;
 
     // Group stats by month
     const statsByMonth = allStats.reduce((acc: Record<string, any[]>, stat) => {
@@ -114,7 +131,7 @@ export default function AnalyticsImproved() {
     // Calculate averages per month
     return Object.entries(statsByMonth)
       .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6) // Last 6 months
+      .slice(-monthsToShow) // Dynamic based on selected time range
       .map(([month, stats]) => {
         const avgTechnical = stats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / stats.length;
         const avgPhysical = stats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / stats.length;
@@ -133,13 +150,20 @@ export default function AnalyticsImproved() {
           overall: Math.round((avgTechnical + avgPhysical + avgTactical + avgMental) / 4)
         };
       });
-  }, [allStats]);
+  }, [allStats, timeRange]);
 
   // Calculate player distribution
   const playersByPosition = useMemo(() => {
     if (!players) return [];
     
-    const positionCounts = players.reduce((acc: Record<string, number>, player) => {
+    // Filter players by selected team if not "all"
+    const playersToAnalyze = selectedTeam === 'all' || !teamPlayerIds 
+      ? players 
+      : players.filter(p => teamPlayerIds.includes(p.id));
+    
+    if (playersToAnalyze.length === 0) return [];
+    
+    const positionCounts = playersToAnalyze.reduce((acc: Record<string, number>, player) => {
       const position = player.position || 'Unassigned';
       acc[position] = (acc[position] || 0) + 1;
       return acc;
@@ -148,9 +172,9 @@ export default function AnalyticsImproved() {
     return Object.entries(positionCounts).map(([name, value]) => ({
       name: name.charAt(0).toUpperCase() + name.slice(1),
       value,
-      percentage: ((value / players.length) * 100).toFixed(1)
+      percentage: ((value / playersToAnalyze.length) * 100).toFixed(1)
     }));
-  }, [players]);
+  }, [players, selectedTeam, teamPlayerIds]);
 
   // Calculate current averages
   const currentAverages = useMemo(() => {
@@ -242,7 +266,6 @@ export default function AnalyticsImproved() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1month">Last Month</SelectItem>
                 <SelectItem value="3months">Last 3 Months</SelectItem>
                 <SelectItem value="6months">Last 6 Months</SelectItem>
                 <SelectItem value="1year">Last Year</SelectItem>

@@ -18,11 +18,11 @@ import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import Team from "./pages/Team";
 import Careers from "./pages/Careers";
+import DevLogin from "./pages/DevLogin";
 
 // Dashboard
 import Dashboard from "./pages/Dashboard";
 import CoachDashboard from './pages/CoachDashboard';
-import TeamDashboard from './pages/TeamDashboard';
 import FeaturesHub from './pages/FeaturesHub';
 import ScoutNetwork from './pages/ScoutNetwork';
 import NutritionAI from './pages/NutritionAI';
@@ -34,7 +34,6 @@ import PlayerScorecard from "./pages/PlayerScorecard";
 import PlayerDashboard from "./pages/PlayerDashboard";
 import Performance from "./pages/Performance";
 import PerformanceDashboard from "./pages/PerformanceDashboard";
-import SkillAssessment from "./pages/SkillAssessment";
 import PlayerComparison from './pages/PlayerComparison';
 
 // Training
@@ -45,7 +44,6 @@ import PrivateTraining from "./pages/PrivateTraining";
 import CoachSchedule from "./pages/CoachSchedule";
 import CoachCalendar from "./pages/CoachCalendar";
 import MyBookings from "./pages/MyBookings";
-import Explore from "./pages/Explore";
 
 // Match & Tactics
 import Matches from "./pages/Matches";
@@ -149,6 +147,7 @@ function Router() {
     <Switch>
       {/* ==================== PUBLIC PAGES ==================== */}
       <Route path="/" component={Home} />
+      <Route path="/dev-login" component={DevLogin} />
       <Route path="/team" component={Team} />
       <Route path="/register" component={Register} />
       <Route path="/user-registration" component={UserRegistration} />
@@ -162,7 +161,6 @@ function Router() {
       {/* ==================== DASHBOARD ==================== */}
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/coach-dashboard" component={CoachDashboard} />
-      <Route path="/team-dashboard" component={TeamDashboard} />
       <Route path="/performance-dashboard" component={PerformanceDashboard} />
       <Route path="/features-hub" component={FeaturesHub} />
       <Route path="/scout-network" component={ScoutNetwork} />
@@ -174,7 +172,6 @@ function Router() {
       <Route path="/player/:id" component={PlayerDashboard} />
       <Route path="/players/:id/scorecard" component={PlayerScorecard} />
       <Route path="/performance" component={Performance} />
-      <Route path="/skill-assessment" component={SkillAssessment} />
       <Route path="/coach/player-comparison" component={PlayerComparison} />
 
       {/* ==================== TRAINING ==================== */}
@@ -183,7 +180,6 @@ function Router() {
       <Route path="/coach/training-planner" component={TrainingSessionPlanner} />
       <Route path="/private-training" component={PrivateTraining} />
       <Route path="/my-bookings" component={MyBookings} />
-      <Route path="/explore" component={Explore} />
       <Route path="/coach-schedule" component={CoachSchedule} />
       <Route path="/coach/calendar" component={CoachCalendar} />
 

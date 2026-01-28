@@ -9,13 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
-import { Plus, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, PlayCircle } from "lucide-react";
+import { Plus, Calendar, Clock, MapPin, Users, CheckCircle, XCircle, PlayCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
-function CreateSessionDialog() {
+function CreateSessionDialog({ defaultTeamId, onSuccess }: { defaultTeamId?: string; onSuccess?: () => void }) {
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
-    teamId: '',
+    teamId: defaultTeamId || '',
     title: '',
     description: '',
     sessionDate: new Date().toISOString().split('T')[0],
@@ -34,15 +34,44 @@ function CreateSessionDialog() {
     onSuccess: () => {
       toast.success('Training session created');
       setOpen(false);
+      // Reset form
+      setFormData({
+        teamId: defaultTeamId || '',
+        title: '',
+        description: '',
+        sessionDate: new Date().toISOString().split('T')[0],
+        startTime: '09:00',
+        endTime: '11:00',
+        location: '',
+        sessionType: 'mixed' as const,
+        objectives: '',
+        drills: '',
+      });
+      // Invalidate and refetch
       utils.training.getUpcoming.invalidate();
+      utils.training.invalidate();
+      // Call parent callback to force refetch
+      onSuccess?.();
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to create session');
     },
   });
 
+  // Update formData.teamId when defaultTeamId changes and dialog opens
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen && defaultTeamId && defaultTeamId !== 'all') {
+      setFormData(prev => ({ ...prev, teamId: defaultTeamId }));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[CreateSession] Submitting:', {
+      ...formData,
+      teamId: formData.teamId ? parseInt(formData.teamId) : undefined,
+    });
     createSession.mutate({
       ...formData,
       teamId: formData.teamId ? parseInt(formData.teamId) : undefined,
@@ -50,7 +79,7 @@ function CreateSessionDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button className="gradient-primary text-primary-foreground">
           <Plus className="h-4 w-4 mr-2" />
@@ -255,24 +284,54 @@ function SessionCard({ session }: { session: any }) {
               )}
             </div>
           </div>
-          {session.status === 'scheduled' && !isPast && (
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => updateSession.mutate({ id: session.id, status: 'in_progress' })}
-              >
-                Start
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => updateSession.mutate({ id: session.id, status: 'completed' })}
-              >
-                Complete
-              </Button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            {session.status === 'scheduled' && !isPast && (
+              <>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="bg-primary"
+                  onClick={() => updateSession.mutate({ id: session.id, status: 'in_progress' })}
+                  disabled={updateSession.isPending}
+                >
+                  <PlayCircle className="h-3 w-3 mr-1" />
+                  Start
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updateSession.mutate({ id: session.id, status: 'cancelled' })}
+                  disabled={updateSession.isPending}
+                >
+                  <XCircle className="h-3 w-3 mr-1" />
+                  Cancel
+                </Button>
+              </>
+            )}
+            {session.status === 'in_progress' && (
+              <>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="bg-primary"
+                  onClick={() => updateSession.mutate({ id: session.id, status: 'completed' })}
+                  disabled={updateSession.isPending}
+                >
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Finish
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => updateSession.mutate({ id: session.id, status: 'cancelled' })}
+                  disabled={updateSession.isPending}
+                >
+                  <XCircle className="h-3 w-3 mr-1" />
+                  Stop
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {session.description && (
@@ -318,18 +377,39 @@ function SessionCard({ session }: { session: any }) {
 
 export default function Training() {
   const [selectedTeam, setSelectedTeam] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(6);
+  
   const { data: teams } = trpc.teams.getAll.useQuery();
-  const { data: upcomingSessions } = trpc.training.getUpcoming.useQuery({
-    teamId: selectedTeam ? parseInt(selectedTeam) : undefined,
+  const { data: upcomingSessions, refetch } = trpc.training.getUpcoming.useQuery({
+    teamId: selectedTeam && selectedTeam !== 'all' ? parseInt(selectedTeam) : undefined,
   });
 
-  // Group sessions by date
-  const groupedSessions = upcomingSessions?.reduce((acc: Record<string, any[]>, session) => {
+  console.log('[Training] Selected team:', selectedTeam);
+  console.log('[Training] Upcoming sessions:', upcomingSessions);
+
+  // Flatten sessions array for pagination
+  const allSessions = upcomingSessions || [];
+  
+  // Calculate pagination
+  const totalPages = Math.ceil(allSessions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSessions = allSessions.slice(startIndex, endIndex);
+
+  // Group paginated sessions by date
+  const groupedSessions = paginatedSessions.reduce((acc: Record<string, any[]>, session) => {
     const date = new Date(session.sessionDate).toLocaleDateString();
     if (!acc[date]) acc[date] = [];
     acc[date].push(session);
     return acc;
   }, {});
+
+  // Reset to page 1 when team filter changes
+  const handleTeamChange = (value: string) => {
+    setSelectedTeam(value);
+    setCurrentPage(1);
+  };
 
   return (
     <DashboardLayout>
@@ -341,7 +421,7 @@ export default function Training() {
               Schedule and manage team training sessions
             </p>
           </div>
-          <CreateSessionDialog />
+          <CreateSessionDialog defaultTeamId={selectedTeam} onSuccess={() => refetch()} />
         </div>
 
         {/* Team Filter */}
@@ -367,19 +447,90 @@ export default function Training() {
         </Card>
 
         {/* Sessions List */}
-        {groupedSessions && Object.keys(groupedSessions).length > 0 ? (
-          <div className="space-y-6">
-            {Object.entries(groupedSessions).map(([date, sessions]) => (
-              <div key={date}>
-                <h2 className="text-sm font-medium text-muted-foreground mb-3">{date}</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                  {sessions.map((session: any) => (
-                    <SessionCard key={session.id} session={session} />
-                  ))}
+        {allSessions.length > 0 ? (
+          <>
+            <div className="space-y-6">
+              {Object.entries(groupedSessions).map(([date, sessions]) => (
+                <div key={date}>
+                  <h2 className="text-sm font-medium text-muted-foreground mb-3">{date}</h2>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {sessions.map((session: any) => (
+                      <SessionCard key={session.id} session={session} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm text-muted-foreground">
+                        Showing {startIndex + 1}-{Math.min(endIndex, allSessions.length)} of {allSessions.length} sessions
+                      </Label>
+                      <Select 
+                        value={itemsPerPage.toString()} 
+                        onValueChange={(value) => {
+                          setItemsPerPage(parseInt(value));
+                          setCurrentPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="6">6</SelectItem>
+                          <SelectItem value="12">12</SelectItem>
+                          <SelectItem value="24">24</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-sm text-muted-foreground">per page</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Previous
+                      </Button>
+                      
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className="w-10"
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
         ) : (
           <Card>
             <CardContent className="p-12 text-center">
@@ -388,7 +539,7 @@ export default function Training() {
               <p className="text-muted-foreground mb-4">
                 Schedule your first training session
               </p>
-              <CreateSessionDialog />
+              <CreateSessionDialog defaultTeamId={selectedTeam} onSuccess={() => refetch()} />
             </CardContent>
           </Card>
         )}

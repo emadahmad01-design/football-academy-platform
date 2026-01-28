@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -220,15 +220,20 @@ export default function VideoUploadModal({ open, onClose, onSuccess }: VideoUplo
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir={isRTL ? 'rtl' : 'ltr'}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Video className="h-5 w-5 text-primary" />
             {c.title}
           </DialogTitle>
+          <DialogDescription>
+            {isRTL 
+              ? 'قم برفع فيديو تدريبي جديد للمكتبة. يمكنك رفع ملف أو إدخال رابط من يوتيوب أو فيميو.' 
+              : 'Upload a new training video to the library. You can upload a file or enter a link from YouTube or Vimeo.'}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-6 py-4 overflow-y-auto max-h-[calc(90vh-180px)]">
           {/* Video Upload Area */}
           <div className="space-y-4">
             <input
@@ -346,7 +351,7 @@ export default function VideoUploadModal({ open, onClose, onSuccess }: VideoUplo
                 <SelectTrigger>
                   <SelectValue placeholder={c.selectCategory} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-[200px]" sideOffset={5}>
                   {CATEGORIES.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {isRTL ? cat.labelAr : cat.label}
@@ -365,7 +370,7 @@ export default function VideoUploadModal({ open, onClose, onSuccess }: VideoUplo
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" sideOffset={5}>
                   <SelectItem value="beginner">{c.beginner}</SelectItem>
                   <SelectItem value="intermediate">{c.intermediate}</SelectItem>
                   <SelectItem value="advanced">{c.advanced}</SelectItem>
@@ -382,7 +387,7 @@ export default function VideoUploadModal({ open, onClose, onSuccess }: VideoUplo
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-[200px]" sideOffset={5}>
                   {AGE_GROUPS.map((age) => (
                     <SelectItem key={age.id} value={age.id}>
                       {isRTL ? age.labelAr : age.label}

@@ -660,8 +660,12 @@ export const appRouter = router({
         return db.getPlayersByAgeGroup(input.ageGroup);
       }),
     getForParent: protectedProcedure.query(async ({ ctx }) => {
+      // Admins can see all players, parents see their linked players
+      if (ctx.user.role === 'admin') {
+        return db.getAllPlayers();
+      }
       if (ctx.user.role !== 'parent') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Parent access only' });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Parent or admin access only' });
       }
       return db.getPlayersForParent(ctx.user.id);
     }),
@@ -951,19 +955,25 @@ export const appRouter = router({
     getPlayerMetrics: protectedProcedure
       .input(z.object({ playerId: z.number(), limit: z.number().optional() }))
       .query(async ({ input, ctx }) => {
-        // Parents can only view their own children
+        // Parents can only view their own children, admins can view all
         if (ctx.user.role === 'parent') {
           const hasAccess = await db.checkParentPlayerAccess(ctx.user.id, input.playerId);
           if (!hasAccess) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
           }
         }
+        // Admins have unrestricted access
         return db.getPlayerPerformanceMetrics(input.playerId, input.limit);
       }),
     getLatest: staffProcedure
       .input(z.object({ playerId: z.number() }))
       .query(async ({ input }) => {
         return (await db.getLatestPerformanceMetric(input.playerId)) ?? null;
+      }),
+    getTeamAverages: staffProcedure
+      .input(z.object({ teamId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getTeamPerformanceAverages(input.teamId);
       }),
     create: coachProcedure
       .input(z.object({
@@ -989,6 +999,7 @@ export const appRouter = router({
         technicalScore: z.number().optional(),
         physicalScore: z.number().optional(),
         tacticalScore: z.number().optional(),
+        mentalScore: z.number().optional(),
         overallScore: z.number().optional(),
         notes: z.string().optional(),
       }))
@@ -1197,7 +1208,10 @@ export const appRouter = router({
     getUpcoming: protectedProcedure
       .input(z.object({ teamId: z.number().optional() }))
       .query(async ({ input }) => {
-        return db.getUpcomingTrainingSessions(input.teamId);
+        console.log('[Training.getUpcoming] Input:', input);
+        const sessions = await db.getUpcomingTrainingSessions(input.teamId);
+        console.log('[Training.getUpcoming] Found sessions:', sessions.length);
+        return sessions;
       }),
     create: coachProcedure
       .input(z.object({
@@ -1213,11 +1227,14 @@ export const appRouter = router({
         drills: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        console.log('[Training.create] Input:', input);
+        console.log('[Training.create] User:', ctx.user.id);
         const id = await db.createTrainingSession({
           ...input,
           sessionDate: new Date(input.sessionDate),
           coachId: ctx.user.id,
         });
+        console.log('[Training.create] Created session with ID:', id);
         return { id };
       }),
     update: coachProcedure
@@ -1575,10 +1592,23 @@ export const appRouter = router({
         notes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Auto-calculate result based on scores if both are provided
+        let calculatedResult = input.result;
+        if (input.teamScore !== undefined && input.opponentScore !== undefined) {
+          if (input.teamScore > input.opponentScore) {
+            calculatedResult = 'win';
+          } else if (input.teamScore < input.opponentScore) {
+            calculatedResult = 'loss';
+          } else {
+            calculatedResult = 'draw';
+          }
+        }
+
         const id = await db.createMatch({
           ...input,
           matchDate: new Date(input.matchDate),
           createdBy: ctx.user.id,
+          result: calculatedResult,
         });
         return { id };
       }),
@@ -1592,7 +1622,20 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
-        await db.updateMatch(id, data);
+        
+        // Auto-calculate result based on scores if both are provided
+        let calculatedResult = data.result;
+        if (data.teamScore !== undefined && data.opponentScore !== undefined) {
+          if (data.teamScore > data.opponentScore) {
+            calculatedResult = 'win';
+          } else if (data.teamScore < data.opponentScore) {
+            calculatedResult = 'loss';
+          } else {
+            calculatedResult = 'draw';
+          }
+        }
+        
+        await db.updateMatch(id, { ...data, result: calculatedResult });
         return { success: true };
       }),
   }),
@@ -2291,6 +2334,28 @@ export const appRouter = router({
         const id = await db.setCoachAvailability({
           ...input,
           coachId: ctx.user.id,
+        });
+        return { success: true, id };
+      }),
+    setAdmin: adminProcedure
+      .input(z.object({
+        coachId: z.number(),
+        dayOfWeek: z.number().min(0).max(6),
+        startTime: z.string(),
+        endTime: z.string(),
+        isAvailable: z.boolean().optional(),
+        sessionType: z.enum(['group', 'private', 'consultation', 'all']).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.setCoachAvailability({
+          dayOfWeek: input.dayOfWeek,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          isAvailable: input.isAvailable,
+          sessionType: input.sessionType,
+          notes: input.notes,
+          coachId: input.coachId,
         });
         return { success: true, id };
       }),
@@ -3010,8 +3075,13 @@ export const appRouter = router({
         };
       }),
 
-    // Get my bookings (for parents)
+    // Get my bookings (for parents and admins)
     getMyBookings: protectedProcedure.query(async ({ ctx }) => {
+      // Admins can see all bookings
+      if (ctx.user.role === 'admin') {
+        return db.getAllPrivateTrainingBookings();
+      }
+      
       // Get all players linked to this parent
       const playerRelations = await db.getParentPlayerRelations(ctx.user.id);
       const playerIds = playerRelations.map(r => r.playerId);
@@ -3041,9 +3111,14 @@ export const appRouter = router({
     }),
 
     // Confirm booking (coach/admin)
-    confirmBooking: coachProcedure
+    confirmBooking: protectedProcedure
       .input(z.object({ bookingId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        // Only coaches and admins can confirm bookings
+        if (!['coach', 'admin'].includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only coaches and admins can confirm bookings' });
+        }
+        
         await db.updatePrivateTrainingBooking(input.bookingId, { status: 'confirmed' });
         
         // Get booking details for notification
@@ -3066,6 +3141,26 @@ export const appRouter = router({
         }
         
         return { success: true, whatsappUrl };
+      }),
+
+    // Reject booking (coach/admin)
+    rejectBooking: protectedProcedure
+      .input(z.object({ 
+        bookingId: z.number(),
+        reason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Only coaches and admins can reject bookings
+        if (!['coach', 'admin'].includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only coaches and admins can reject bookings' });
+        }
+        
+        await db.updatePrivateTrainingBooking(input.bookingId, { 
+          status: 'cancelled',
+          notes: input.reason ? `Rejected: ${input.reason}` : 'Rejected by coach'
+        });
+        
+        return { success: true };
       }),
 
     // Complete booking (coach/admin)
@@ -3187,6 +3282,39 @@ export const appRouter = router({
     getMySlots: coachProcedure.query(async ({ ctx }) => {
       return db.getCoachScheduleSlots(ctx.user.id);
     }),
+
+    // Admin: Get slots for any coach
+    getCoachSlotsAdmin: adminProcedure
+      .input(z.object({ coachId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getCoachScheduleSlots(input.coachId);
+      }),
+
+    // Admin: Add slot for any coach
+    addSlotForCoach: adminProcedure
+      .input(z.object({
+        coachId: z.number(),
+        dayOfWeek: z.number().min(0).max(6),
+        startTime: z.string(),
+        endTime: z.string(),
+        locationId: z.number().optional(),
+        pricePerSession: z.number().optional(),
+        isRecurring: z.boolean().optional(),
+        specificDate: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const slotId = await db.createCoachScheduleSlot({
+          coachId: input.coachId,
+          dayOfWeek: input.dayOfWeek,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          locationId: input.locationId,
+          pricePerSession: input.pricePerSession,
+          isRecurring: input.isRecurring ?? true,
+          specificDate: input.specificDate ? new Date(input.specificDate) : undefined,
+        });
+        return { success: true, slotId };
+      }),
 
     // Update slot availability
     updateSlot: coachProcedure
@@ -3537,6 +3665,43 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await db.deleteFormation(input.id);
         return { success: true };
+      }),
+
+    // Get user's tactical board formations
+    getUserFormations: protectedProcedure
+      .query(async ({ ctx }) => {
+        return db.getUserFormations(ctx.user.id);
+      }),
+
+    // Save tactical board formation (with drawings and player positions)
+    saveTacticalBoard: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        homeFormation: z.string(),
+        awayFormation: z.string(),
+        homePlayers: z.string(), // JSON
+        awayPlayers: z.string(), // JSON
+        drawings: z.string().optional(), // JSON
+        teamId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const positions = JSON.stringify({
+          homeFormation: input.homeFormation,
+          awayFormation: input.awayFormation,
+          homePlayers: JSON.parse(input.homePlayers),
+          awayPlayers: JSON.parse(input.awayPlayers),
+          drawings: input.drawings ? JSON.parse(input.drawings) : []
+        });
+        
+        return db.createFormation({
+          name: input.name,
+          templateName: `${input.homeFormation} vs ${input.awayFormation}`,
+          description: `Tactical board setup`,
+          positions,
+          teamId: input.teamId,
+          createdBy: ctx.user.id,
+          isTemplate: false,
+        });
       }),
 
     // Create set piece

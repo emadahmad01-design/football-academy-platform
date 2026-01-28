@@ -1,0 +1,1 @@
+ALTER TABLE `training_videos` MODIFY COLUMN `videoUrl` varchar(2000) NOT NULL;

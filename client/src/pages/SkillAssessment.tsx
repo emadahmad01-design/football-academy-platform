@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -106,90 +107,75 @@ export default function SkillAssessment() {
   const averageScore = Math.round(skills.reduce((sum, s) => sum + s.value, 0) / skills.length);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
-      {/* Header */}
-      <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-700 sticky top-0 z-50">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/coach-progress">
-                <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-white">Skill Assessment</h1>
-                <p className="text-slate-400 text-sm">Rate player skills and track development</p>
-              </div>
-            </div>
-            {selectedPlayerId && (
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => {
-                    if (!selectedPlayer) return;
-                    exportSkillAssessmentPDF({
-                      playerName: `${selectedPlayer.firstName} ${selectedPlayer.lastName}`,
-                      date: new Date().toISOString().split('T')[0],
-                      skills: skills.map(s => ({ name: s.name, value: s.value })),
-                      overallRating: averageScore,
-                      coachNotes: notes || undefined,
-                    });
-                  }}
-                  variant="outline"
-                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                >
-                  <FileDown className="w-4 h-4 mr-2" />
-                  Export PDF
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saveSkillsMutation.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  {saveSkillsMutation.isPending ? (
-                    <>Saving...</>
-                  ) : saveSuccess ? (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Saved!
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Save Assessment
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Skill Assessment</h1>
+            <p className="text-muted-foreground">Rate player skills and track development</p>
           </div>
+          {selectedPlayerId && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => {
+                  if (!selectedPlayer) return;
+                  exportSkillAssessmentPDF({
+                    playerName: `${selectedPlayer.firstName} ${selectedPlayer.lastName}`,
+                    date: new Date().toISOString().split('T')[0],
+                    skills: skills.map(s => ({ name: s.name, value: s.value })),
+                    overallRating: averageScore,
+                    coachNotes: notes || undefined,
+                  });
+                }}
+                variant="outline"
+              >
+                <FileDown className="w-4 h-4 mr-2" />
+                Export PDF
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saveSkillsMutation.isPending}
+              >
+                {saveSkillsMutation.isPending ? (
+                  <>Saving...</>
+                ) : saveSuccess ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Saved!
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Assessment
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
-      </header>
-
-      <div className="container py-6">
         {/* Player Selection */}
-        <Card className="bg-slate-800 border-slate-700 mb-6">
+        <Card>
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
               <User className="w-5 h-5" />
               Select Player
             </CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription>
               Choose a player to assess their skills
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Select value={selectedPlayerId} onValueChange={setSelectedPlayerId}>
-              <SelectTrigger className="w-full md:w-96 bg-slate-700 border-slate-600 text-white">
+              <SelectTrigger className="w-full md:w-96">
                 <SelectValue placeholder="Select a player..." />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
+              <SelectContent>
                 {playersLoading ? (
                   <SelectItem value="loading" disabled>Loading players...</SelectItem>
                 ) : players && players.length > 0 ? (
                   players.map((player) => (
-                    <SelectItem key={player.id} value={player.id.toString()} className="text-white">
+                    <SelectItem key={player.id} value={player.id.toString()}>
                       {player.firstName} {player.lastName} - {player.position || "No position"}
                     </SelectItem>
                   ))
@@ -231,13 +217,13 @@ export default function SkillAssessment() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Skill Sliders */}
             <div className="lg:col-span-2">
-              <Card className="bg-slate-800 border-slate-700">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <Star className="w-5 h-5" />
                     Skill Ratings
                   </CardTitle>
-                  <CardDescription className="text-slate-400">
+                  <CardDescription>
                     Drag sliders to rate each skill from 0-100
                   </CardDescription>
                 </CardHeader>
@@ -252,12 +238,12 @@ export default function SkillAssessment() {
                               <skill.icon className="w-4 h-4 text-white" />
                             </div>
                             <div>
-                              <span className="text-white font-medium">{skill.name}</span>
-                              <p className="text-slate-500 text-xs">{skill.description}</p>
+                              <span className="font-medium">{skill.name}</span>
+                              <p className="text-xs text-muted-foreground">{skill.description}</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <span className="text-2xl font-bold text-white">{skill.value}</span>
+                            <span className="text-2xl font-bold">{skill.value}</span>
                             <span className={`block text-xs ${scoreInfo.color}`}>{scoreInfo.label}</span>
                           </div>
                         </div>
@@ -268,7 +254,7 @@ export default function SkillAssessment() {
                           step={1}
                           className="w-full"
                         />
-                        <div className="flex justify-between text-xs text-slate-500">
+                        <div className="flex justify-between text-xs text-muted-foreground">
                           <span>0</span>
                           <span>25</span>
                           <span>50</span>
@@ -280,13 +266,13 @@ export default function SkillAssessment() {
                   })}
 
                   {/* Notes */}
-                  <div className="pt-4 border-t border-slate-700">
-                    <label className="block text-white font-medium mb-2">Coach Notes</label>
+                  <div className="pt-4 border-t">
+                    <label className="block font-medium mb-2">Coach Notes</label>
                     <Textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Add any observations, recommendations, or areas to focus on..."
-                      className="bg-slate-700 border-slate-600 text-white min-h-[100px]"
+                      className="min-h-[100px]"
                     />
                   </div>
                 </CardContent>
@@ -296,9 +282,9 @@ export default function SkillAssessment() {
             {/* Skill Summary & History */}
             <div className="space-y-6">
               {/* Radar Summary */}
-              <Card className="bg-slate-800 border-slate-700">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <TrendingUp className="w-5 h-5" />
                     Skill Overview
                   </CardTitle>
@@ -312,10 +298,10 @@ export default function SkillAssessment() {
                         </div>
                         <div className="flex-1">
                           <div className="flex justify-between text-sm mb-1">
-                            <span className="text-slate-300">{skill.name}</span>
-                            <span className="text-white font-medium">{skill.value}</span>
+                            <span className="text-muted-foreground">{skill.name}</span>
+                            <span className="font-medium">{skill.value}</span>
                           </div>
-                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
                             <div
                               className={`h-full ${skill.color} transition-all duration-300`}
                               style={{ width: `${skill.value}%` }}
@@ -326,11 +312,11 @@ export default function SkillAssessment() {
                     ))}
                   </div>
 
-                  <div className="mt-6 pt-4 border-t border-slate-700">
+                  <div className="mt-6 pt-4 border-t">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Overall Rating</span>
+                      <span className="text-muted-foreground">Overall Rating</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-3xl font-bold text-white">{averageScore}</span>
+                        <span className="text-3xl font-bold">{averageScore}</span>
                         <span className={`text-sm ${getScoreLabel(averageScore).color}`}>
                           {getScoreLabel(averageScore).label}
                         </span>
@@ -341,9 +327,9 @@ export default function SkillAssessment() {
               </Card>
 
               {/* Assessment History */}
-              <Card className="bg-slate-800 border-slate-700">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <History className="w-5 h-5" />
                     Recent Assessments
                   </CardTitle>
@@ -352,10 +338,10 @@ export default function SkillAssessment() {
                   {skillHistory && skillHistory.length > 0 ? (
                     <div className="space-y-3">
                       {skillHistory.slice(0, 5).map((record: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                        <div key={idx} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                           <div>
-                            <div className="text-white font-medium capitalize">{record.skillName?.replace(/([A-Z])/g, ' $1').trim()}</div>
-                            <div className="text-slate-400 text-xs">
+                            <div className="font-medium capitalize">{record.skillName?.replace(/([A-Z])/g, ' $1').trim()}</div>
+                            <div className="text-muted-foreground text-xs">
                               {new Date(record.recordedAt).toLocaleDateString()}
                             </div>
                           </div>
@@ -366,7 +352,7 @@ export default function SkillAssessment() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 text-slate-400">
+                    <div className="text-center py-6 text-muted-foreground">
                       <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p>No previous assessments</p>
                     </div>
@@ -378,15 +364,15 @@ export default function SkillAssessment() {
         )}
 
         {!selectedPlayerId && (
-          <Card className="bg-slate-800 border-slate-700">
+          <Card>
             <CardContent className="py-12 text-center">
-              <User className="w-16 h-16 mx-auto mb-4 text-slate-500" />
-              <h3 className="text-xl font-semibold text-white mb-2">Select a Player</h3>
-              <p className="text-slate-400">Choose a player from the dropdown above to start the skill assessment</p>
+              <User className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-xl font-semibold mb-2">Select a Player</h3>
+              <p className="text-muted-foreground">Choose a player from the dropdown above to start the skill assessment</p>
             </CardContent>
           </Card>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

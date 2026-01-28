@@ -21,9 +21,8 @@ import {
   Users,
   Target,
   Clock,
-  ChevronRight,
-  Star,
-  Award
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,25 +31,11 @@ export default function Matches() {
   const [, setLocation] = useLocation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<number | null>(null);
-  const [motmDialogOpen, setMotmDialogOpen] = useState(false);
-  const [selectedMatchForMotm, setSelectedMatchForMotm] = useState<any>(null);
-  const [motmData, setMotmData] = useState({ playerId: "", rating: 8, reason: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const { data: matches, isLoading, refetch } = trpc.matches.getAll.useQuery();
   const { data: teams } = trpc.teams.getAll.useQuery();
-  const { data: players } = trpc.players.getAll.useQuery();
-
-  const setMotm = trpc.motm.set.useMutation({
-    onSuccess: () => {
-      toast.success("Man of the Match selected!");
-      setMotmDialogOpen(false);
-      setSelectedMatchForMotm(null);
-      refetch();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
 
   const createMatch = trpc.matches.create.useMutation({
     onSuccess: () => {
@@ -126,6 +111,17 @@ export default function Matches() {
     }),
     { total: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 }
   ) || { total: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+
+  // Pagination logic
+  const totalMatches = matches?.length || 0;
+  const totalPages = Math.ceil(totalMatches / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedMatches = matches?.slice(startIndex, endIndex) || [];
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
 
   return (
     <DashboardLayout>
@@ -329,73 +325,106 @@ export default function Matches() {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : matches && matches.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Opponent</TableHead>
-                    <TableHead>Venue</TableHead>
-                    <TableHead className="text-center">Score</TableHead>
-                    <TableHead>Result</TableHead>
-                    <TableHead>MOTM</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {matches.map((match) => (
-                    <TableRow key={match.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {new Date(match.matchDate).toLocaleDateString()}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getMatchTypeBadge(match.matchType)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          {match.opponent || "TBD"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          {match.venue || "-"}
-                          {match.isHome && <Badge variant="outline" className="ml-1">H</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center font-bold">
-                        {match.teamScore ?? "-"} - {match.opponentScore ?? "-"}
-                      </TableCell>
-                      <TableCell>{getResultBadge(match.result)}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-primary"
-                          onClick={() => {
-                            setSelectedMatchForMotm(match);
-                            setMotmDialogOpen(true);
-                          }}
-                        >
-                          <Star className="h-4 w-4 mr-1" />
-                          MOTM
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setLocation(`/matches/${match.id}`)}
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Opponent</TableHead>
+                      <TableHead>Venue</TableHead>
+                      <TableHead className="text-center">Score</TableHead>
+                      <TableHead>Result</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedMatches.map((match) => (
+                      <TableRow key={match.id} className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            {new Date(match.matchDate).toLocaleDateString()}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getMatchTypeBadge(match.matchType)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            {match.opponent || "TBD"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            {match.venue || "-"}
+                            {match.isHome && <Badge variant="outline" className="ml-1">H</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {match.teamScore ?? "-"} - {match.opponentScore ?? "-"}
+                        </TableCell>
+                        <TableCell>{getResultBadge(match.result)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1} to {Math.min(endIndex, totalMatches)} of {totalMatches} matches
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(page => {
+                            if (totalPages <= 7) return true;
+                            if (page === 1 || page === totalPages) return true;
+                            if (Math.abs(page - currentPage) <= 1) return true;
+                            return false;
+                          })
+                          .map((page, index, array) => {
+                            const showEllipsis = index > 0 && array[index - 1] !== page - 1;
+                            return (
+                              <span key={`page-${page}`} className="flex items-center gap-1">
+                                {showEllipsis && (
+                                  <span className="px-2 text-muted-foreground">...</span>
+                                )}
+                                <Button
+                                  variant={currentPage === page ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => goToPage(page)}
+                                  className="w-8 h-8 p-0"
+                                >
+                                  {page}
+                                </Button>
+                              </span>
+                            );
+                          })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12">
                 <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -409,81 +438,6 @@ export default function Matches() {
             )}
           </CardContent>
         </Card>
-
-        {/* Man of the Match Dialog */}
-        <Dialog open={motmDialogOpen} onOpenChange={setMotmDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-primary" />
-                Select Man of the Match
-              </DialogTitle>
-              <DialogDescription>
-                {selectedMatchForMotm && (
-                  <span>
-                    {selectedMatchForMotm.opponent} - {new Date(selectedMatchForMotm.matchDate).toLocaleDateString()}
-                  </span>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Select Player</Label>
-                <Select
-                  value={motmData.playerId}
-                  onValueChange={(value) => setMotmData({ ...motmData, playerId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose the best player" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {players?.map((player) => (
-                      <SelectItem key={player.id} value={player.id.toString()}>
-                        {player.firstName} {player.lastName} - {player.position}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Rating (1-10)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={motmData.rating}
-                  onChange={(e) => setMotmData({ ...motmData, rating: parseInt(e.target.value) || 8 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Reason</Label>
-                <Textarea
-                  value={motmData.reason}
-                  onChange={(e) => setMotmData({ ...motmData, reason: e.target.value })}
-                  placeholder="Why was this player selected as MOTM?"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setMotmDialogOpen(false)}>Cancel</Button>
-              <Button
-                onClick={() => {
-                  if (selectedMatchForMotm && motmData.playerId) {
-                    setMotm.mutate({
-                      matchId: selectedMatchForMotm.id,
-                      playerId: parseInt(motmData.playerId),
-                      rating: motmData.rating,
-                      reason: motmData.reason,
-                    });
-                  }
-                }}
-                disabled={!motmData.playerId || setMotm.isPending}
-              >
-                {setMotm.isPending ? "Saving..." : "Select MOTM"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </DashboardLayout>
   );
