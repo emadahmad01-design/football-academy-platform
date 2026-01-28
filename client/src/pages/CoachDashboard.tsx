@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { trpc } from '@/lib/trpc';
 import { EmptyState } from '../components/EmptyState';
+import DashboardLayout from '@/components/DashboardLayout';
 import { 
   Trophy, 
   Download, 
@@ -61,6 +62,7 @@ export default function CoachDashboard() {
     : 0;
 
   return (
+    <DashboardLayout>
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 dark:from-slate-950 dark:via-blue-950 dark:to-slate-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -212,9 +214,9 @@ export default function CoachDashboard() {
                       <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center mb-3">
                         <Award className="h-8 w-8 text-white" />
                       </div>
-                      <CardTitle className="text-lg">{userBadge.badge.name}</CardTitle>
+                      <CardTitle className="text-lg">{userBadge.name}</CardTitle>
                       <CardDescription className="mt-1">
-                        {userBadge.badge.description}
+                        {userBadge.description}
                       </CardDescription>
                     </div>
                   </CardHeader>
@@ -408,5 +410,6 @@ export default function CoachDashboard() {
         </div>
       </div>
     </div>
+    </DashboardLayout>
   );
 }

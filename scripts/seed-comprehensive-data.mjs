@@ -94,7 +94,7 @@ try {
 
   // 3. Create Training Sessions
   console.log('🏋️ Creating training sessions...');
-  const sessionTypes = ['Technical', 'Tactical', 'Physical', 'Mental', 'Match Preparation'];
+  const sessionTypes = ['Technical', 'Tactical', 'Physical', 'Match', 'Recovery', 'Mixed'];
   const sessionCount = 30;
 
   for (let i = 0; i < sessionCount; i++) {
@@ -105,9 +105,9 @@ try {
     const intensity = ['Low', 'Medium', 'High'][randomInt(0, 2)];
 
     await connection.execute(
-      `INSERT INTO trainingSessions (teamId, date, type, duration, intensity, notes)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [teamId, sessionDate, sessionType, duration, intensity, `${sessionType} training session`]
+      `INSERT INTO training_sessions (teamId, sessionDate, startTime, endTime, sessionType, title, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [teamId, sessionDate, '18:00', '20:00', sessionType.toLowerCase(), `${sessionType} Training`, `${sessionType} training session focusing on development`]
     );
   }
   console.log(`✅ Created ${sessionCount} training sessions\n`);
@@ -131,9 +131,9 @@ try {
     const result = goalsFor > goalsAgainst ? 'win' : goalsFor < goalsAgainst ? 'loss' : 'draw';
 
     const [matchResult] = await connection.execute(
-      `INSERT INTO matches (teamId, opponent, date, location, goalsFor, goalsAgainst, result, matchType)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [teamId, opponent, matchDate, isHome ? 'Home' : 'Away', goalsFor, goalsAgainst, result, 'League']
+      `INSERT INTO matches (teamId, opponent, matchDate, venue, isHome, teamScore, opponentScore, result, matchType)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [teamId, opponent, matchDate, isHome ? 'Home Ground' : 'Away Ground', isHome, goalsFor, goalsAgainst, result, 'league']
     );
     matchIds.push({ id: matchResult.insertId, teamId });
   }
@@ -148,17 +148,22 @@ try {
     for (let i = 0; i < numMetrics; i++) {
       const metricDate = randomDate(new Date(2024, 0, 1), new Date());
 
+      const technical = randomInt(60, 95);
+      const physical = randomInt(60, 95);
+      const tactical = randomInt(60, 95);
+      const overall = Math.round((technical + physical + tactical) / 3);
+
       await connection.execute(
-        `INSERT INTO performanceMetrics 
-         (playerId, date, technicalScore, physicalScore, tacticalScore, mentalScore, 
-          distance, sprints, topSpeed, touches, passes, passAccuracy, shots, goals, assists)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO performance_metrics 
+         (playerId, sessionDate, sessionType, technicalScore, physicalScore, tacticalScore, overallScore,
+          distanceCovered, sprints, topSpeed, touches, passes, passAccuracy, shots)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          player.id, metricDate,
-          randomInt(60, 95), randomInt(60, 95), randomInt(60, 95), randomInt(60, 95),
-          randomFloat(5, 12, 1), randomInt(10, 40), randomFloat(25, 35, 1),
-          randomInt(30, 80), randomInt(20, 60), randomFloat(70, 95, 1),
-          randomInt(0, 8), randomInt(0, 3), randomInt(0, 2)
+          player.id, metricDate, 'training',
+          technical, physical, tactical, overall,
+          randomInt(5000, 12000), randomInt(10, 40), randomInt(250, 350), // topSpeed is likely int * 10 or similar, checking schema it is int.
+          randomInt(30, 80), randomInt(20, 60), randomInt(70, 95),
+          randomInt(0, 8)
         ]
       );
       metricsCount++;
@@ -176,8 +181,8 @@ try {
       const assessmentDate = randomDate(new Date(2024, 0, 1), new Date());
 
       await connection.execute(
-        `INSERT INTO mentalAssessments 
-         (playerId, date, anxietyLevel, confidenceLevel, focusLevel, resilienceScore, 
+        `INSERT INTO mental_assessments 
+         (playerId, assessmentDate, anxietyLevel, confidenceLevel, focusLevel, resilienceScore, 
           stressLevel, motivationLevel, notes)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -194,7 +199,7 @@ try {
 
   // 7. Create Nutrition Plans
   console.log('🍎 Creating nutrition plans...');
-  const mealTypes = ['Pre-Training', 'Post-Training', 'Match Day', 'Recovery', 'General'];
+  const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'pre_training', 'post_training'];
   let nutritionCount = 0;
 
   for (const player of playerIds) {
@@ -204,13 +209,13 @@ try {
       const mealType = mealTypes[randomInt(0, mealTypes.length - 1)];
 
       await connection.execute(
-        `INSERT INTO nutritionPlans 
-         (playerId, date, mealType, calories, protein, carbs, fats, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO meal_plans 
+         (playerId, planDate, mealType, calories, protein, carbs, fats, notes, title)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           player.id, planDate, mealType,
           randomInt(1800, 3000), randomInt(80, 150), randomInt(200, 350), randomInt(50, 90),
-          `${mealType} nutrition plan`
+          `${mealType} nutrition plan`, `${mealType} Plan`
         ]
       );
       nutritionCount++;
@@ -220,7 +225,7 @@ try {
 
   // 8. Create Physical Training Workouts
   console.log('💪 Creating physical workouts...');
-  const workoutTypes = ['Strength', 'Endurance', 'Speed', 'Agility', 'Flexibility', 'Recovery'];
+  const workoutTypes = ['strength', 'endurance', 'agility', 'flexibility', 'recovery'];
   let workoutCount = 0;
 
   for (const player of playerIds) {
@@ -230,13 +235,14 @@ try {
       const workoutType = workoutTypes[randomInt(0, workoutTypes.length - 1)];
 
       await connection.execute(
-        `INSERT INTO physicalWorkouts 
-         (playerId, date, workoutType, duration, intensity, exercises, notes)
+        `INSERT INTO workout_plans 
+         (playerId, scheduledDate, category, durationMinutes, exercises, description, title)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           player.id, workoutDate, workoutType,
-          randomInt(30, 90), ['Low', 'Medium', 'High'][randomInt(0, 2)],
-          `${workoutType} exercises`, `${workoutType} workout session`
+          randomInt(30, 90), 
+          JSON.stringify([{ name: `Exercise 1`, sets: 3, reps: 10 }]),
+           `${workoutType} workout session`, `${workoutType} Workout`
         ]
       );
       workoutCount++;
@@ -258,14 +264,14 @@ try {
       const progress = randomInt(0, 100);
 
       await connection.execute(
-        `INSERT INTO developmentPlans 
-         (playerId, category, goal, startDate, targetDate, progress, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO development_plans 
+         (playerId, title, startDate, endDate, overallProgress, status)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
-          player.id, category,
+          player.id,
           `Improve ${category.toLowerCase()} skills`,
           startDate, targetDate, progress,
-          progress >= 100 ? 'completed' : progress > 0 ? 'in_progress' : 'not_started'
+          progress >= 100 ? 'completed' : 'active'
         ]
       );
       idpCount++;
@@ -288,13 +294,13 @@ try {
       const assists = player.position !== 'GK' ? randomInt(0, 2) : 0;
 
       await connection.execute(
-        `INSERT INTO playerMatchStats 
+        `INSERT INTO player_match_stats 
          (playerId, matchId, minutesPlayed, goals, assists, shots, shotsOnTarget, 
-          passes, passAccuracy, tackles, interceptions, fouls, yellowCards, redCards)
+          passes, passAccuracy, tackles, interceptions, foulsCommitted, yellowCards, redCards)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           player.id, match.id, minutesPlayed, goals, assists,
-          randomInt(0, 8), randomInt(0, 5), randomInt(10, 50), randomFloat(70, 95, 1),
+          randomInt(0, 8), randomInt(0, 5), randomInt(10, 50), randomInt(70, 95),
           player.position === 'DF' ? randomInt(3, 10) : randomInt(0, 5),
           player.position === 'DF' ? randomInt(2, 8) : randomInt(0, 4),
           randomInt(0, 3), Math.random() > 0.9 ? 1 : 0, Math.random() > 0.98 ? 1 : 0

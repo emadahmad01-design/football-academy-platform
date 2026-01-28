@@ -47,7 +47,7 @@ function MetricCard({
   );
 }
 
-function RecordPerformanceDialog() {
+function RecordPerformanceDialog({ preselectedPlayerId }: { preselectedPlayerId?: string }) {
   const [open, setOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [formData, setFormData] = useState({
@@ -63,6 +63,12 @@ function RecordPerformanceDialog() {
     distanceCovered: '',
     topSpeed: '',
     sprints: '',
+    accelerations: '',
+    decelerations: '',
+    possessionWon: '',
+    possessionLost: '',
+    interceptions: '',
+    tackles: '',
     technicalScore: '',
     physicalScore: '',
     tacticalScore: '',
@@ -84,6 +90,12 @@ function RecordPerformanceDialog() {
     },
   });
 
+  useEffect(() => {
+    if (open && preselectedPlayerId) {
+      setSelectedPlayer(preselectedPlayerId);
+    }
+  }, [open, preselectedPlayerId]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlayer) {
@@ -103,6 +115,12 @@ function RecordPerformanceDialog() {
       distanceCovered: formData.distanceCovered ? parseFloat(formData.distanceCovered) : undefined,
       topSpeed: formData.topSpeed ? parseFloat(formData.topSpeed) : undefined,
       sprints: formData.sprints ? parseInt(formData.sprints) : undefined,
+      accelerations: formData.accelerations ? parseInt(formData.accelerations) : undefined,
+      decelerations: formData.decelerations ? parseInt(formData.decelerations) : undefined,
+      possessionWon: formData.possessionWon ? parseInt(formData.possessionWon) : undefined,
+      possessionLost: formData.possessionLost ? parseInt(formData.possessionLost) : undefined,
+      interceptions: formData.interceptions ? parseInt(formData.interceptions) : undefined,
+      tackles: formData.tackles ? parseInt(formData.tackles) : undefined,
       technicalScore: formData.technicalScore ? parseInt(formData.technicalScore) : undefined,
       physicalScore: formData.physicalScore ? parseInt(formData.physicalScore) : undefined,
       tacticalScore: formData.tacticalScore ? parseInt(formData.tacticalScore) : undefined,
@@ -134,7 +152,7 @@ function RecordPerformanceDialog() {
                   <SelectTrigger>
                     <SelectValue placeholder="Select player" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10001]">
                     {players?.map((player: any) => (
                       <SelectItem key={player.id} value={player.id.toString()}>
                         {player.firstName} {player.lastName}
@@ -152,7 +170,7 @@ function RecordPerformanceDialog() {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10001]">
                     <SelectItem value="training">Training</SelectItem>
                     <SelectItem value="match">Match</SelectItem>
                     <SelectItem value="assessment">Assessment</SelectItem>
@@ -227,6 +245,15 @@ function RecordPerformanceDialog() {
                     placeholder="0"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Successful Dribbles</Label>
+                  <Input
+                    type="number"
+                    value={formData.successfulDribbles}
+                    onChange={(e) => setFormData({ ...formData, successfulDribbles: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
               </div>
             </div>
 
@@ -259,6 +286,66 @@ function RecordPerformanceDialog() {
                     type="number"
                     value={formData.sprints}
                     onChange={(e) => setFormData({ ...formData, sprints: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Accelerations</Label>
+                  <Input
+                    type="number"
+                    value={formData.accelerations}
+                    onChange={(e) => setFormData({ ...formData, accelerations: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Decelerations</Label>
+                  <Input
+                    type="number"
+                    value={formData.decelerations}
+                    onChange={(e) => setFormData({ ...formData, decelerations: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Possession & Defensive</h4>
+              <div className="grid grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Possession Won</Label>
+                  <Input
+                    type="number"
+                    value={formData.possessionWon}
+                    onChange={(e) => setFormData({ ...formData, possessionWon: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Possession Lost</Label>
+                  <Input
+                    type="number"
+                    value={formData.possessionLost}
+                    onChange={(e) => setFormData({ ...formData, possessionLost: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Interceptions</Label>
+                  <Input
+                    type="number"
+                    value={formData.interceptions}
+                    onChange={(e) => setFormData({ ...formData, interceptions: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Tackles</Label>
+                  <Input
+                    type="number"
+                    value={formData.tackles}
+                    onChange={(e) => setFormData({ ...formData, tackles: e.target.value })}
                     placeholder="0"
                   />
                 </div>
@@ -360,7 +447,20 @@ export default function Performance() {
     { enabled: !!selectedPlayer }
   );
 
-  const latestMetric = metrics?.[0];
+  const [selectedMetricId, setSelectedMetricId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (metrics && metrics.length > 0 && selectedMetricId === null) {
+      setSelectedMetricId(metrics[0].id);
+    } else if (metrics && metrics.length > 0 && !metrics.find(m => m.id === selectedMetricId)) {
+        // If selected ID is no longer in the list (e.g. switched player), reset to first
+        setSelectedMetricId(metrics[0].id);
+    } else if (!metrics || metrics.length === 0) {
+        setSelectedMetricId(null);
+    }
+  }, [metrics, selectedMetricId]);
+
+  const currentMetric = metrics?.find(m => m.id === selectedMetricId) || metrics?.[0];
 
   return (
     <DashboardLayout>
@@ -372,7 +472,7 @@ export default function Performance() {
               Monitor and analyze player performance metrics
             </p>
           </div>
-          <RecordPerformanceDialog />
+          <RecordPerformanceDialog preselectedPlayerId={selectedPlayer} />
         </div>
 
         {/* Player Selection */}
@@ -396,7 +496,7 @@ export default function Performance() {
           </CardContent>
         </Card>
 
-        {selectedPlayer && latestMetric ? (
+        {selectedPlayer && currentMetric ? (
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -411,7 +511,7 @@ export default function Performance() {
                 <Card className="stat-glow">
                   <CardContent className="p-6 text-center">
                     <div className="text-5xl font-bold text-primary mb-2">
-                      {latestMetric.overallScore || '--'}
+                      {currentMetric.overallScore || '--'}
                     </div>
                     <div className="text-sm text-muted-foreground">Overall Score</div>
                   </CardContent>
@@ -419,7 +519,7 @@ export default function Performance() {
                 <Card>
                   <CardContent className="p-6 text-center">
                     <div className="text-4xl font-bold text-chart-1 mb-2">
-                      {latestMetric.technicalScore || '--'}
+                      {currentMetric.technicalScore || '--'}
                     </div>
                     <div className="text-sm text-muted-foreground">Technical</div>
                   </CardContent>
@@ -427,7 +527,7 @@ export default function Performance() {
                 <Card>
                   <CardContent className="p-6 text-center">
                     <div className="text-4xl font-bold text-chart-2 mb-2">
-                      {latestMetric.physicalScore || '--'}
+                      {currentMetric.physicalScore || '--'}
                     </div>
                     <div className="text-sm text-muted-foreground">Physical</div>
                   </CardContent>
@@ -435,7 +535,7 @@ export default function Performance() {
                 <Card>
                   <CardContent className="p-6 text-center">
                     <div className="text-4xl font-bold text-chart-3 mb-2">
-                      {latestMetric.tacticalScore || '--'}
+                      {currentMetric.tacticalScore || '--'}
                     </div>
                     <div className="text-sm text-muted-foreground">Tactical</div>
                   </CardContent>
@@ -445,49 +545,49 @@ export default function Performance() {
               {/* Latest Session Info */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Latest Session</CardTitle>
+                  <CardTitle>Session Details</CardTitle>
                   <CardDescription>
-                    {latestMetric.sessionType} on {new Date(latestMetric.sessionDate).toLocaleDateString()}
+                    {currentMetric.sessionType} on {new Date(currentMetric.sessionDate).toLocaleDateString()}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
                     <MetricCard
                       label="Touches"
-                      value={latestMetric.touches || 0}
+                      value={currentMetric.touches || 0}
                       icon={Footprints}
                       color="primary"
                     />
                     <MetricCard
                       label="Passes"
-                      value={latestMetric.passes || 0}
+                      value={currentMetric.passes || 0}
                       icon={Activity}
                       color="chart-2"
                     />
                     <MetricCard
                       label="Pass Accuracy"
-                      value={latestMetric.passAccuracy || 0}
+                      value={currentMetric.passAccuracy || 0}
                       unit="%"
                       icon={Target}
                       color="chart-3"
                     />
                     <MetricCard
                       label="Distance"
-                      value={latestMetric.distanceCovered || 0}
+                      value={currentMetric.distanceCovered || 0}
                       unit="km"
                       icon={TrendingUp}
                       color="chart-4"
                     />
                     <MetricCard
                       label="Top Speed"
-                      value={latestMetric.topSpeed || 0}
+                      value={currentMetric.topSpeed || 0}
                       unit="km/h"
                       icon={Zap}
                       color="accent"
                     />
                     <MetricCard
                       label="Sprints"
-                      value={latestMetric.sprints || 0}
+                      value={currentMetric.sprints || 0}
                       icon={Timer}
                       color="primary"
                     />
@@ -509,15 +609,15 @@ export default function Performance() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Touches</span>
-                          <span className="font-medium">{latestMetric.touches || 0}</span>
+                          <span className="font-medium">{currentMetric.touches || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Dribbles Attempted</span>
-                          <span className="font-medium">{latestMetric.dribbles || 0}</span>
+                          <span className="font-medium">{currentMetric.dribbles || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Successful Dribbles</span>
-                          <span className="font-medium">{latestMetric.successfulDribbles || 0}</span>
+                          <span className="font-medium">{currentMetric.successfulDribbles || 0}</span>
                         </div>
                       </div>
                     </div>
@@ -526,11 +626,11 @@ export default function Performance() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Total Passes</span>
-                          <span className="font-medium">{latestMetric.passes || 0}</span>
+                          <span className="font-medium">{currentMetric.passes || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Pass Accuracy</span>
-                          <span className="font-medium">{latestMetric.passAccuracy || 0}%</span>
+                          <span className="font-medium">{currentMetric.passAccuracy || 0}%</span>
                         </div>
                       </div>
                     </div>
@@ -539,16 +639,16 @@ export default function Performance() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Shots</span>
-                          <span className="font-medium">{latestMetric.shots || 0}</span>
+                          <span className="font-medium">{currentMetric.shots || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Shots on Target</span>
-                          <span className="font-medium">{latestMetric.shotsOnTarget || 0}</span>
+                          <span className="font-medium">{currentMetric.shotsOnTarget || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Shot Accuracy</span>
                           <span className="font-medium">
-                            {latestMetric.shots ? Math.round((latestMetric.shotsOnTarget || 0) / latestMetric.shots * 100) : 0}%
+                            {currentMetric.shots ? Math.round((currentMetric.shotsOnTarget || 0) / currentMetric.shots * 100) : 0}%
                           </span>
                         </div>
                       </div>
@@ -558,11 +658,11 @@ export default function Performance() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Interceptions</span>
-                          <span className="font-medium">{latestMetric.interceptions || 0}</span>
+                          <span className="font-medium">{currentMetric.interceptions || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm">Tackles</span>
-                          <span className="font-medium">{latestMetric.tackles || 0}</span>
+                          <span className="font-medium">{currentMetric.tackles || 0}</span>
                         </div>
                       </div>
                     </div>
@@ -581,27 +681,27 @@ export default function Performance() {
                   <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <MetricCard
                       label="Distance Covered"
-                      value={latestMetric.distanceCovered || 0}
+                      value={currentMetric.distanceCovered || 0}
                       unit="km"
                       icon={TrendingUp}
                       color="primary"
                     />
                     <MetricCard
                       label="Top Speed"
-                      value={latestMetric.topSpeed || 0}
+                      value={currentMetric.topSpeed || 0}
                       unit="km/h"
                       icon={Zap}
                       color="chart-2"
                     />
                     <MetricCard
                       label="Sprints"
-                      value={latestMetric.sprints || 0}
+                      value={currentMetric.sprints || 0}
                       icon={Timer}
                       color="chart-3"
                     />
                     <MetricCard
                       label="Accelerations"
-                      value={latestMetric.accelerations || 0}
+                      value={currentMetric.accelerations || 0}
                       icon={Activity}
                       color="chart-4"
                     />
@@ -619,7 +719,13 @@ export default function Performance() {
                 <CardContent>
                   <div className="space-y-4">
                     {metrics?.map((metric, i) => (
-                      <div key={i} className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+                      <button
+                        key={i}
+                        onClick={() => setSelectedMetricId(metric.id)}
+                        className={`w-full flex items-center gap-4 p-4 rounded-lg transition-colors text-left ${
+                          metric.id === selectedMetricId ? 'bg-primary/20 ring-2 ring-primary' : 'bg-muted/50 hover:bg-muted'
+                        }`}
+                      >
                         <div className="text-center min-w-[80px]">
                           <div className="text-2xl font-bold text-primary">{metric.overallScore || '--'}</div>
                           <div className="text-xs text-muted-foreground">Overall</div>
@@ -637,7 +743,7 @@ export default function Performance() {
                             <span>Tact: {metric.tacticalScore || '--'}</span>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </CardContent>
@@ -652,7 +758,7 @@ export default function Performance() {
               <p className="text-muted-foreground mb-4">
                 Start recording performance metrics for this player
               </p>
-              <RecordPerformanceDialog />
+              <RecordPerformanceDialog preselectedPlayerId={selectedPlayer} />
             </CardContent>
           </Card>
         ) : (

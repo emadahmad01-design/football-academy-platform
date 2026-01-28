@@ -17,12 +17,12 @@ export const performanceRouter = router({
         };
       }
       
-      // Build radar chart data
+      // Build radar chart data using actual player_skill_scores columns
       const radarData = [
-        { skill: 'Technical', value: latestSkills.technicalScore || 0 },
-        { skill: 'Physical', value: latestSkills.physicalScore || 0 },
-        { skill: 'Tactical', value: latestSkills.tacticalScore || 0 },
-        { skill: 'Mental', value: latestSkills.mentalScore || 0 },
+        { skill: 'Technical', value: latestSkills.technicalOverall || 0 },
+        { skill: 'Physical', value: latestSkills.physicalOverall || 0 },
+        { skill: 'Tactical', value: latestSkills.defensiveOverall || 0 },
+        { skill: 'Mental', value: latestSkills.mentalOverall || 0 },
         { skill: 'Ball Control', value: latestSkills.ballControl || 0 },
         { skill: 'Passing', value: latestSkills.passing || 0 }
       ];
@@ -30,26 +30,25 @@ export const performanceRouter = router({
       // Get skill history for progression chart
       const skillHistory = await db.getSkillScoreHistory(input.playerId);
       
-      // Build progression data
+      // Build progression data using available overall columns
       const progressionData = skillHistory.slice(-10).map(s => ({
         date: s.assessmentDate ? new Date(s.assessmentDate).toLocaleDateString() : 'N/A',
-        technical: s.technicalScore || 0,
-        physical: s.physicalScore || 0,
-        tactical: s.tacticalScore || 0,
-        mental: s.mentalScore || 0
+        technical: s.technicalOverall || 0,
+        physical: s.physicalOverall || 0,
+        tactical: s.defensiveOverall || 0,
+        mental: s.mentalOverall || 0
       }));
       
       // Calculate overall rating (average of all scores)
       const scores = [
-        latestSkills.technicalScore,
-        latestSkills.physicalScore,
-        latestSkills.tacticalScore,
-        latestSkills.mentalScore,
+        latestSkills.technicalOverall,
+        latestSkills.physicalOverall,
+        latestSkills.defensiveOverall,
+        latestSkills.mentalOverall,
         latestSkills.ballControl,
         latestSkills.passing,
         latestSkills.shooting,
         latestSkills.dribbling,
-        latestSkills.defending,
         latestSkills.positioning
       ].filter(s => s !== null && s !== undefined) as number[];
       
@@ -60,7 +59,8 @@ export const performanceRouter = router({
       return {
         overallRating,
         radarData,
-        progressionData
+        progressionData,
+        latestSkills // include raw latest skill row for frontend fallback
       };
     })
 });

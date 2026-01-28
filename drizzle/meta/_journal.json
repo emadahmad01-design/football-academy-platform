@@ -99,6 +99,13 @@
       "when": 1765103531871,
       "tag": "0013_fearless_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1769005707498,
+      "tag": "0014_goofy_rocket_racer",
+      "breakpoints": true
     }
   ]
 }

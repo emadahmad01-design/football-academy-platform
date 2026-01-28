@@ -430,7 +430,7 @@ export default function DashboardLayout({
   // Get player info for the current user to determine their team
   const { data: playerInfo } = trpc.players.getByUserId.useQuery(
     { userId: user?.id ?? 0 },
-    { enabled: !!user && (user.role === 'player') }
+    { enabled: !!user?.id && user.role === 'player' }
   );
   
   // Get parent's children to determine team for parent users

@@ -36,6 +36,21 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "500mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
+  // DEV AUTH ROUTE
+  if (process.env.NODE_ENV === "development") {
+    app.get("/app-auth", (req, res) => {
+      const redirectUri = req.query.redirectUri as string;
+      const state = req.query.state as string;
+      if (redirectUri && state) {
+        const separator = redirectUri.includes("?") ? "&" : "?";
+        res.redirect(`${redirectUri}${separator}code=dev-code&state=${state}`);
+      } else {
+        res.status(400).send("Dev Auth: Missing redirectUri or state");
+      }
+    });
+  }
+
   // File upload endpoint
   app.use('/api', createUploadRouter());
   // tRPC API

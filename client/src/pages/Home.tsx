@@ -35,6 +35,9 @@ export default function Home() {
   // Fetch featured testimonials
   const { data: featuredTestimonials } = trpc.testimonials.getFeatured.useQuery();
   
+  // Fetch gallery videos
+  const galleryQuery = trpc.academyVideos.getGallery.useQuery();
+  
   // Contact form state
   const [contactForm, setContactForm] = useState({
     name: "",
@@ -300,12 +303,14 @@ export default function Home() {
               )}
               {isAuthenticated ? (
                 <Link href="/dashboard">
-                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
-                    {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
-                  </Button>
+                  <a className="inline-block">
+                    <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                      {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+                    </Button>
+                  </a>
                 </Link>
               ) : (
-                <a href={getLoginUrl()}>
+                <a href={getLoginUrl()} className="inline-block">
                   <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
                     {language === 'ar' ? 'تسجيل الدخول' : 'Login'}
                   </Button>
@@ -420,12 +425,14 @@ export default function Home() {
           >
             {isAuthenticated ? (
               <Link href="/dashboard">
-                <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8">
-                  {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
-                </Button>
+                <a className="inline-block">
+                  <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8">
+                    {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
+                  </Button>
+                </a>
               </Link>
             ) : (
-              <a href={getLoginUrl()}>
+              <a href={getLoginUrl()} className="inline-block">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8">
                   {language === 'ar' ? 'ابدأ الآن' : 'Get Started'}
                 </Button>
@@ -595,45 +602,75 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { src: '/media/team/b77066c1-11b8-4798-acb0-ae5d3b971ce0.jpg', title: language === 'ar' ? 'فريق الأكاديمية' : 'Academy Team' },
-              { src: '/media/team/5980967093731969141(1).jpg', title: language === 'ar' ? 'تدريب جماعي' : 'Team Training' },
-              { src: '/hero.mp4', title: language === 'ar' ? 'فيديو تدريبي' : 'Training Video', isVideo: true },
-              { src: '/training1.mp4', title: language === 'ar' ? 'تمارين فنية' : 'Technical Drills', isVideo: true },
-              { src: '/training2.mp4', title: language === 'ar' ? 'تدريب اللياقة' : 'Fitness Training', isVideo: true },
-              { src: '/training3.mp4', title: language === 'ar' ? 'مباراة تدريبية' : 'Practice Match', isVideo: true },
-            ].map((item, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="group relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300"
-              >
-                {item.isVideo ? (
-                  <video 
-                    src={item.src} 
-                    className="w-full h-64 object-cover"
-                    muted
-                    loop
-                    onMouseEnter={(e) => e.currentTarget.play()}
-                    onMouseLeave={(e) => e.currentTarget.pause()}
-                  />
-                ) : (
+            {galleryQuery.isLoading ? (
+              <div className="col-span-full text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              </div>
+            ) : galleryQuery.data && galleryQuery.data.length > 0 ? (
+              galleryQuery.data.map((item: any, index: number) => {
+                const metadata = typeof item.description === 'string' ? JSON.parse(item.description) : {};
+                const isVideo = metadata.isVideo || item.videoUrl?.endsWith('.mp4');
+                const title = language === 'ar' && metadata.titleAr ? metadata.titleAr : item.title;
+                
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    viewport={{ once: true }}
+                    className="group relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300"
+                  >
+                    {isVideo ? (
+                      <video 
+                        src={item.videoUrl} 
+                        className="w-full h-64 object-cover"
+                        muted
+                        loop
+                        onMouseEnter={(e) => e.currentTarget.play()}
+                        onMouseLeave={(e) => e.currentTarget.pause()}
+                      />
+                    ) : (
+                      <img 
+                        src={item.videoUrl} 
+                        alt={title}
+                        className="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="absolute bottom-0 left-0 right-0 p-4">
+                        <h3 className="text-white font-semibold text-lg">{title}</h3>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })
+            ) : (
+              [
+                { src: '/media/team/b77066c1-11b8-4798-acb0-ae5d3b971ce0.jpg', title: language === 'ar' ? 'فريق الأكاديمية' : 'Academy Team' },
+                { src: '/media/team/5980967093731969141(1).jpg', title: language === 'ar' ? 'تدريب جماعي' : 'Team Training' },
+              ].map((item, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  viewport={{ once: true }}
+                  className="group relative overflow-hidden rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300"
+                >
                   <img 
                     src={item.src} 
                     alt={item.title}
                     className="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-300"
                   />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <h3 className="text-white font-semibold text-lg">{item.title}</h3>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <h3 className="text-white font-semibold text-lg">{item.title}</h3>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            )}
           </div>
         </div>
       </section>

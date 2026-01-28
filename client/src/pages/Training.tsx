@@ -85,7 +85,7 @@ function CreateSessionDialog() {
                   <SelectTrigger>
                     <SelectValue placeholder="Select team" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10001]">
                     {teams?.map((team) => (
                       <SelectItem key={team.id} value={team.id.toString()}>
                         {team.name}
@@ -134,7 +134,7 @@ function CreateSessionDialog() {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10001]">
                     <SelectItem value="technical">Technical</SelectItem>
                     <SelectItem value="tactical">Tactical</SelectItem>
                     <SelectItem value="physical">Physical</SelectItem>

@@ -7,7 +7,7 @@ import {
   emailCampaigns, emailTemplates, emailSends,
   referrals, referralRewards,
   scoutReports, mealLogs, injuryRiskAssessments,
-  educationCourses, courseLessons, parentEducationEnrollments, parentLessonProgress,
+  educationCourses, courseLessons, parentEducEnrollments, parentLessonProgress,
   vrScenarios, vrSessions,
   players
 } from "../drizzle/schema";
@@ -51,16 +51,16 @@ export const qrCheckInRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [checkIn] = await db.insert(qrCheckIns).values({
+      const result = await db.insert(qrCheckIns).values({
         playerId: input.playerId,
         sessionId: input.sessionId,
         qrCode: input.qrCode,
         location: input.location,
         status: "checked_in",
         checkInTime: new Date(),
-      }).returning();
+      });
       
-      return checkIn;
+      return { id: result[0].insertId, ...input, status: "checked_in", checkInTime: new Date() };
     }),
 
   // Check out
@@ -135,7 +135,7 @@ export const socialMediaRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [post] = await db.insert(socialMediaPosts).values({
+      const result = await db.insert(socialMediaPosts).values({
         userId: ctx.user.id,
         title: input.title,
         content: input.content,
@@ -143,9 +143,9 @@ export const socialMediaRouter = router({
         platforms: input.platforms,
         scheduledAt: input.scheduledAt,
         status: input.scheduledAt ? "scheduled" : "draft",
-      }).returning();
+      });
       
-      return post;
+      return { id: result[0].insertId, userId: ctx.user.id, ...input, status: input.scheduledAt ? "scheduled" : "draft", createdAt: new Date() };
     }),
 
   // Publish post immediately
@@ -207,15 +207,15 @@ export const emailCampaignsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [campaign] = await db.insert(emailCampaigns).values({
+      const result = await db.insert(emailCampaigns).values({
         name: input.name,
         description: input.description,
         targetAudience: input.targetAudience,
         createdBy: ctx.user.id,
         status: "draft",
-      }).returning();
+      });
       
-      return campaign;
+      return { id: result[0].insertId, ...input, createdBy: ctx.user.id, status: "draft" as const, createdAt: new Date() };
     }),
 
   // Add email template to campaign
@@ -232,9 +232,9 @@ export const emailCampaignsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [template] = await db.insert(emailTemplates).values(input).returning();
+      const result = await db.insert(emailTemplates).values(input);
       
-      return template;
+      return { id: result[0].insertId, ...input, createdAt: new Date() };
     }),
 
   // Activate campaign
@@ -308,7 +308,7 @@ export const referralRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [referral] = await db.insert(referrals).values({
+      const result = await db.insert(referrals).values({
         referrerUserId: ctx.user.id,
         referralCode: input.referralCode,
         referredEmail: input.referredEmail,
@@ -316,9 +316,9 @@ export const referralRouter = router({
         status: "pending",
         rewardType: "discount",
         rewardValue: "20%",
-      }).returning();
+      });
       
-      return referral;
+      return { id: result[0].insertId, referrerUserId: ctx.user.id, ...input, status: "pending" as const, rewardType: "discount" as const, rewardValue: "20%", createdAt: new Date() };
     }),
 
   // Get user referrals
@@ -415,7 +415,7 @@ Also provide detailed analysis, strengths, weaknesses, and recommendations.`;
         };
       }
       
-      const [report] = await db.insert(scoutReports).values({
+      const result = await db.insert(scoutReports).values({
         scoutUserId: ctx.user.id,
         playerName: input.playerName,
         playerAge: input.playerAge,
@@ -427,9 +427,9 @@ Also provide detailed analysis, strengths, weaknesses, and recommendations.`;
         aiAnalysis,
         status: "draft",
         visibility: "private",
-      }).returning();
+      });
       
-      return report;
+      return { id: result[0].insertId, scoutUserId: ctx.user.id, ...input, ...scores, aiAnalysis, status: "draft" as const, visibility: "private" as const, createdAt: new Date() };
     }),
 
   // Get scout reports
@@ -537,7 +537,10 @@ Also provide overall nutrition analysis and recommendations.`;
       const totalCarbs = recognizedFoods.reduce((sum, food) => sum + food.carbs, 0);
       const totalFat = recognizedFoods.reduce((sum, food) => sum + food.fat, 0);
       
-      const [mealLog] = await db.insert(mealLogs).values({
+      const aiAnalysisText = typeof llmResponse.choices?.[0]?.message?.content === 'string' ? llmResponse.choices[0].message.content : "Nutrition analysis completed";
+      const nutritionScore = 75 + Math.floor(Math.random() * 20);
+      
+      const result = await db.insert(mealLogs).values({
         userId: ctx.user.id,
         playerId: input.playerId,
         mealType: input.mealType,
@@ -549,12 +552,12 @@ Also provide overall nutrition analysis and recommendations.`;
         totalProtein,
         totalCarbs,
         totalFat,
-        aiAnalysis: typeof llmResponse.choices?.[0]?.message?.content === 'string' ? llmResponse.choices[0].message.content : "Nutrition analysis completed",
-        nutritionScore: 75 + Math.floor(Math.random() * 20),
+        aiAnalysis: aiAnalysisText,
+        nutritionScore,
         alignsWithPlan: true,
-      }).returning();
+      });
       
-      return mealLog;
+      return { id: result[0].insertId, userId: ctx.user.id, ...input, mealDate: new Date(input.mealDate), mealTime: new Date(), recognizedFoods, totalCalories, totalProtein, totalCarbs, totalFat, aiAnalysis: aiAnalysisText, nutritionScore, alignsWithPlan: true, createdAt: new Date() };
     }),
 
   // Get meal logs
@@ -569,11 +572,13 @@ Also provide overall nutrition analysis and recommendations.`;
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      let query = db.select().from(mealLogs).where(eq(mealLogs.userId, ctx.user.id));
+      const conditions = [eq(mealLogs.userId, ctx.user.id)];
       
       if (input.playerId) {
-        query = query.where(eq(mealLogs.playerId, input.playerId)) as any;
+        conditions.push(eq(mealLogs.playerId, input.playerId));
       }
+      
+      const query = db.select().from(mealLogs).where(and(...conditions));
       
       const logs = await query
         .orderBy(desc(mealLogs.mealTime))
@@ -621,7 +626,11 @@ Provide:
       const riskScore = acuteChronicRatio > 150 ? 75 : acuteChronicRatio > 120 ? 50 : 25;
       const riskLevel = riskScore > 70 ? "high" : riskScore > 40 ? "moderate" : "low";
       
-      const [assessment] = await db.insert(injuryRiskAssessments).values({
+      const aiAnalysisText = typeof llmResponse2.choices?.[0]?.message?.content === 'string' ? llmResponse2.choices[0].message.content : "Risk analysis completed";
+      const recommendedRestDays = riskScore > 70 ? 2 : riskScore > 40 ? 1 : 0;
+      const recommendedTrainingLoad = riskScore > 70 ? 70 : riskScore > 40 ? 85 : 100;
+      
+      const result = await db.insert(injuryRiskAssessments).values({
         playerId: input.playerId,
         assessmentDate: new Date(),
         acuteWorkload,
@@ -641,17 +650,17 @@ Provide:
           { type: "Hamstring strain", probability: 0.15, bodyPart: "hamstring" },
           { type: "Ankle sprain", probability: 0.08, bodyPart: "ankle" },
         ],
-        recommendedRestDays: riskScore > 70 ? 2 : riskScore > 40 ? 1 : 0,
-        recommendedTrainingLoad: riskScore > 70 ? 70 : riskScore > 40 ? 85 : 100,
+        recommendedRestDays,
+        recommendedTrainingLoad,
         specificRecommendations: [
           "Focus on recovery and stretching",
           "Reduce high-intensity training",
           "Monitor hamstring tightness",
         ],
-        aiAnalysis: typeof llmResponse2.choices?.[0]?.message?.content === 'string' ? llmResponse2.choices[0].message.content : "Risk analysis completed",
-      }).returning();
+        aiAnalysis: aiAnalysisText,
+      });
       
-      return assessment;
+      return { id: result[0].insertId, playerId: input.playerId, assessmentDate: new Date(), acuteWorkload, chronicWorkload, acuteChronicRatio, recentTrainingSessions: 8, recentMatchMinutes: 180, recentHighIntensityMinutes: 120, daysSinceLastMatch: 2, daysSinceLastTraining: 1, sleepQualityScore: 75, fatigueLevel: 35, musclesSoreness: 40, overallRiskScore: riskScore, riskLevel, predictedInjuryTypes: [{ type: "Hamstring strain", probability: 0.15, bodyPart: "hamstring" }, { type: "Ankle sprain", probability: 0.08, bodyPart: "ankle" }], recommendedRestDays, recommendedTrainingLoad, specificRecommendations: ["Focus on recovery and stretching", "Reduce high-intensity training", "Monitor hamstring tightness"], aiAnalysis: aiAnalysisText, createdAt: new Date() };
     }),
 
   // Get assessments
@@ -730,19 +739,19 @@ export const educationAcademyRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      await db.insert(parentEducationEnrollments).values({
+      await db.insert(parentEducEnrollments).values({
         userId: ctx.user.id,
         courseId: input.courseId,
         progress: 0,
       });
       
       const [enrollment] = await db.select()
-        .from(parentEducationEnrollments)
+        .from(parentEducEnrollments)
         .where(and(
-          eq(parentEducationEnrollments.userId, ctx.user.id),
-          eq(parentEducationEnrollments.courseId, input.courseId)
+          eq(parentEducEnrollments.userId, ctx.user.id),
+          eq(parentEducEnrollments.courseId, input.courseId)
         ))
-        .orderBy(desc(parentEducationEnrollments.id))
+        .orderBy(desc(parentEducEnrollments.id))
         .limit(1);
       
       return enrollment;
@@ -769,8 +778,8 @@ export const educationAcademyRouter = router({
       
       // Check if all lessons in the course are completed
       const enrollment = await db.select()
-        .from(parentEducationEnrollments)
-        .where(eq(parentEducationEnrollments.id, input.enrollmentId))
+        .from(parentEducEnrollments)
+        .where(eq(parentEducEnrollments.id, input.enrollmentId))
         .limit(1);
       
       if (enrollment.length > 0) {
@@ -778,8 +787,8 @@ export const educationAcademyRouter = router({
         
         // Get all lessons for this course
         const allLessons = await db.select()
-          .from(parentEducationLessons)
-          .where(eq(parentEducationLessons.courseId, courseId));
+          .from(courseLessons)
+          .where(eq(courseLessons.courseId, courseId));
         
         // Get completed lessons for this enrollment
         const completedLessons = await db.select()
@@ -792,8 +801,8 @@ export const educationAcademyRouter = router({
         // If all lessons are completed, generate certificate and send email
         if (allLessons.length > 0 && completedLessons.length === allLessons.length) {
           const course = await db.select()
-            .from(parentEducationCourses)
-            .where(eq(parentEducationCourses.id, courseId))
+            .from(educationCourses)
+            .where(eq(educationCourses.id, courseId))
             .limit(1);
           
           if (course.length > 0 && !enrollment[0].completedAt) {
@@ -803,29 +812,31 @@ export const educationAcademyRouter = router({
               const certificateId = generateCertificateId(ctx.user.id, courseId);
               
               const certificate = await generateCourseCertificate({
-                recipientName: ctx.user.name || ctx.user.email,
+                recipientName: ctx.user.name || ctx.user.email || 'Student',
                 courseName: course[0].title,
                 completionDate: new Date(),
                 certificateId,
               });
               
               // Update enrollment with completion and certificate
-              await db.update(parentEducationEnrollments)
+              await db.update(parentEducEnrollments)
                 .set({
                   completedAt: new Date(),
                   certificateUrl: certificate.url,
                 })
-                .where(eq(parentEducationEnrollments.id, input.enrollmentId));
+                .where(eq(parentEducEnrollments.id, input.enrollmentId));
               
               // Send completion email
               try {
                 const { sendCourseCompletionEmail } = await import('./emailService');
-                await sendCourseCompletionEmail(ctx.user.email, {
-                  parentName: ctx.user.name || ctx.user.email,
-                  courseName: course[0].title,
-                  completionDate: new Date(),
-                  certificateUrl: certificate.url,
-                });
+                if (ctx.user.email) {
+                  await sendCourseCompletionEmail(ctx.user.email, {
+                    parentName: ctx.user.name || ctx.user.email,
+                    courseName: course[0].title,
+                    completionDate: new Date(),
+                    certificateUrl: certificate.url,
+                  });
+                }
               } catch (emailError) {
                 console.error('Failed to send course completion email:', emailError);
               }
@@ -846,9 +857,9 @@ export const educationAcademyRouter = router({
       if (!db) throw new Error("Database not available");
       
       const enrollments = await db.select()
-        .from(parentEducationEnrollments)
-        .where(eq(parentEducationEnrollments.userId, ctx.user.id))
-        .orderBy(desc(parentEducationEnrollments.enrolledAt));
+        .from(parentEducEnrollments)
+        .where(eq(parentEducEnrollments.userId, ctx.user.id))
+        .orderBy(desc(parentEducEnrollments.enrolledAt));
       
       return enrollments;
     }),
@@ -861,19 +872,19 @@ export const educationAcademyRouter = router({
       category: z.enum(['general', 'nutrition', 'youth_development', 'sports_psychology', 'injury_prevention', 'parenting']),
       difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
       thumbnailUrl: z.string().optional(),
-      estimatedHours: z.number(),
+      duration: z.number(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [result] = await db.insert(parentEducationCourses).values({
+      const [result] = await db.insert(educationCourses).values({
         title: input.title,
         description: input.description,
         category: input.category,
         difficulty: input.difficulty,
         thumbnailUrl: input.thumbnailUrl,
-        estimatedHours: input.estimatedHours,
+        duration: input.duration,
         isPublished: true,
       });
       
@@ -889,7 +900,7 @@ export const educationAcademyRouter = router({
       category: z.enum(['general', 'nutrition', 'youth_development', 'sports_psychology', 'injury_prevention', 'parenting']).optional(),
       difficulty: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
       thumbnailUrl: z.string().optional(),
-      estimatedHours: z.number().optional(),
+      duration: z.number().optional(),
       isPublished: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -897,9 +908,9 @@ export const educationAcademyRouter = router({
       if (!db) throw new Error("Database not available");
       
       const { courseId, ...updateData } = input;
-      await db.update(parentEducationCourses)
+      await db.update(educationCourses)
         .set(updateData)
-        .where(eq(parentEducationCourses.id, courseId));
+        .where(eq(educationCourses.id, courseId));
       
       return { success: true };
     }),
@@ -914,12 +925,12 @@ export const educationAcademyRouter = router({
       if (!db) throw new Error("Database not available");
       
       // Delete lessons first
-      await db.delete(parentEducationLessons)
-        .where(eq(parentEducationLessons.courseId, input.courseId));
+      await db.delete(courseLessons)
+        .where(eq(courseLessons.courseId, input.courseId));
       
       // Delete course
-      await db.delete(parentEducationCourses)
-        .where(eq(parentEducationCourses.id, input.courseId));
+      await db.delete(educationCourses)
+        .where(eq(educationCourses.id, input.courseId));
       
       return { success: true };
     }),
@@ -930,23 +941,25 @@ export const educationAcademyRouter = router({
       courseId: z.number(),
       title: z.string(),
       description: z.string(),
-      content: z.string(),
+      contentType: z.enum(['video', 'article', 'quiz', 'assignment']),
+      articleContent: z.string().optional(),
       videoUrl: z.string().optional(),
       duration: z.number(),
-      orderIndex: z.number(),
+      sequenceNumber: z.number(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      const [result] = await db.insert(parentEducationLessons).values({
+      const [result] = await db.insert(courseLessons).values({
         courseId: input.courseId,
         title: input.title,
         description: input.description,
-        content: input.content,
+        contentType: input.contentType,
+        articleContent: input.articleContent,
         videoUrl: input.videoUrl,
         duration: input.duration,
-        orderIndex: input.orderIndex,
+        sequenceNumber: input.sequenceNumber,
       });
       
       return { success: true, lessonId: result.insertId };
@@ -961,8 +974,8 @@ export const educationAcademyRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
-      await db.delete(parentEducationLessons)
-        .where(eq(parentEducationLessons.id, input.lessonId));
+      await db.delete(courseLessons)
+        .where(eq(courseLessons.id, input.lessonId));
       
       return { success: true };
     }),
@@ -977,9 +990,9 @@ export const educationAcademyRouter = router({
       if (!db) throw new Error("Database not available");
       
       const lessons = await db.select()
-        .from(parentEducationLessons)
-        .where(eq(parentEducationLessons.courseId, input.courseId))
-        .orderBy(parentEducationLessons.orderIndex);
+        .from(courseLessons)
+        .where(eq(courseLessons.courseId, input.courseId))
+        .orderBy(courseLessons.sequenceNumber);
       
       return lessons;
     }),

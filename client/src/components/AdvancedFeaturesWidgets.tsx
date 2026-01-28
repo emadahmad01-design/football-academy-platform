@@ -100,7 +100,7 @@ export function AdvancedFeaturesWidgets() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => setLocation('/tactical-simulation-lab')}
+              onClick={() => setLocation('/professional-tactical-board')}
             >
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -128,7 +128,7 @@ export function AdvancedFeaturesWidgets() {
           <Button 
             variant="outline" 
             className="w-full"
-            onClick={() => setLocation('/tactical-simulation-lab')}
+            onClick={() => setLocation('/professional-tactical-board')}
           >
             Open Tactical Lab
           </Button>

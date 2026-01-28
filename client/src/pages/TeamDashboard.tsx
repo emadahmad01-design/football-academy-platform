@@ -229,28 +229,28 @@ export default function TeamDashboard() {
                         <span>{language === 'ar' ? 'حراس المرمى' : 'Goalkeepers'}</span>
                         <span>{positionStats.goalkeeper}</span>
                       </div>
-                      <Progress value={(positionStats.goalkeeper / totalPlayers) * 100} className="h-2" />
+                      <Progress value={totalPlayers > 0 ? (positionStats.goalkeeper / totalPlayers) * 100 : 0} className="h-2" />
                     </div>
                     <div>
                       <div className="flex justify-between text-sm mb-1">
                         <span>{language === 'ar' ? 'المدافعين' : 'Defenders'}</span>
                         <span>{positionStats.defender}</span>
                       </div>
-                      <Progress value={(positionStats.defender / totalPlayers) * 100} className="h-2 bg-blue-100 [&>div]:bg-blue-500" />
+                      <Progress value={totalPlayers > 0 ? (positionStats.defender / totalPlayers) * 100 : 0} className="h-2 bg-blue-100 [&>div]:bg-blue-500" />
                     </div>
                     <div>
                       <div className="flex justify-between text-sm mb-1">
                         <span>{language === 'ar' ? 'لاعبي الوسط' : 'Midfielders'}</span>
                         <span>{positionStats.midfielder}</span>
                       </div>
-                      <Progress value={(positionStats.midfielder / totalPlayers) * 100} className="h-2 bg-green-100 [&>div]:bg-green-500" />
+                      <Progress value={totalPlayers > 0 ? (positionStats.midfielder / totalPlayers) * 100 : 0} className="h-2 bg-green-100 [&>div]:bg-green-500" />
                     </div>
                     <div>
                       <div className="flex justify-between text-sm mb-1">
                         <span>{language === 'ar' ? 'المهاجمين' : 'Forwards'}</span>
                         <span>{positionStats.forward}</span>
                       </div>
-                      <Progress value={(positionStats.forward / totalPlayers) * 100} className="h-2 bg-red-100 [&>div]:bg-red-500" />
+                      <Progress value={totalPlayers > 0 ? (positionStats.forward / totalPlayers) * 100 : 0} className="h-2 bg-red-100 [&>div]:bg-red-500" />
                     </div>
                   </div>
                 </CardContent>

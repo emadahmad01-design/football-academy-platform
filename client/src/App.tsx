@@ -80,6 +80,7 @@ import AIDashboard from './pages/AIDashboard';
 // Analytics & Reports
 import Analytics from './pages/AnalyticsImproved';
 import XGAnalytics from "./pages/XGAnalytics";
+import DataAnalysisPro from './pages/DataAnalysisPro';
 import MatchReports from './pages/MatchReports';
 import MatchReportGenerator from './pages/MatchReportGenerator';
 
@@ -219,6 +220,7 @@ function Router() {
       {/* ==================== ANALYTICS & REPORTS ==================== */}
       <Route path="/analytics" component={Analytics} />
       <Route path="/xg-analytics" component={XGAnalytics} />
+      <Route path="/data-analysis-pro" component={DataAnalysisPro} />
       <Route path="/match-reports" component={MatchReports} />
       <Route path="/coach/match-report-generator" component={MatchReportGenerator} />
 

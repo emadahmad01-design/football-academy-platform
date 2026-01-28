@@ -708,6 +708,7 @@ export const registrationRequests = mysqlTable("registration_requests", {
   message: text("message"),
   status: mysqlEnum("status", ["pending", "contacted", "trial_scheduled", "accepted", "rejected"]).default("pending"),
   notes: text("notes"), // Internal notes
+  reviewedBy: int("reviewedBy").references(() => users.id), // Staff who reviewed this request
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -736,9 +737,9 @@ export type InsertContactInquiry = typeof contactInquiries.$inferInsert;
 
 export const gpsTrackerData = mysqlTable("gps_tracker_data", {
   id: int("id").autoincrement().primaryKey(),
-  playerId: int("playerId").notNull(),
-  sessionId: int("sessionId"), // Link to training session
-  matchId: int("matchId"), // Link to match
+  playerId: int("playerId").references(() => players.id).notNull(),
+  sessionId: int("sessionId").references(() => trainingSessions.id), // Link to training session
+  matchId: int("matchId").references(() => matches.id), // Link to match
   deviceType: varchar("deviceType", { length: 50 }), // STATSports, CITYPLAY, etc.
   deviceId: varchar("deviceId", { length: 100 }),
   recordedAt: timestamp("recordedAt").notNull(),
@@ -1050,6 +1051,7 @@ export const masterclassContent = mysqlTable("masterclass_content", {
   seriesName: varchar("seriesName", { length: 100 }),
   isPublished: boolean("isPublished").default(true),
   viewCount: int("viewCount").default(0),
+  createdBy: int("createdBy").references(() => users.id), // Staff who uploaded content
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -1814,6 +1816,7 @@ export const playermakerSettings = mysqlTable("playermaker_settings", {
   autoSyncEnabled: boolean("autoSyncEnabled").default(false),
   autoSyncFrequency: mysqlEnum("autoSyncFrequency", ["hourly", "daily", "weekly"]).default("daily"),
   nextScheduledSync: timestamp("nextScheduledSync"),
+  updatedBy: int("updatedBy").references(() => users.id), // Staff who updated settings
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -2619,6 +2622,7 @@ export const enrollmentSubmissions = mysqlTable("enrollment_submissions", {
   
   // Status
   status: mysqlEnum("status", ["pending", "approved", "rejected", "contacted"]).default("pending"),
+  reviewedBy: int("reviewedBy").references(() => users.id),
   notes: text("notes"),
   
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -2934,7 +2938,7 @@ export const courseLessons = mysqlTable("course_lessons", {
 export type CourseLesson = typeof courseLessons.$inferSelect;
 export type InsertCourseLesson = typeof courseLessons.$inferInsert;
 
-export const parentEducationEnrollments = mysqlTable("parent_education_enrollments", {
+export const parentEducEnrollments = mysqlTable("parent_enroll", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").references(() => users.id).notNull(),
   courseId: int("courseId").references(() => educationCourses.id).notNull(),
@@ -2945,12 +2949,12 @@ export const parentEducationEnrollments = mysqlTable("parent_education_enrollmen
   lastAccessedAt: timestamp("lastAccessedAt"),
 });
 
-export type ParentEducationEnrollment = typeof parentEducationEnrollments.$inferSelect;
-export type InsertParentEducationEnrollment = typeof parentEducationEnrollments.$inferInsert;
+export type ParentEducationEnrollment = typeof parentEducEnrollments.$inferSelect;
+export type InsertParentEducationEnrollment = typeof parentEducEnrollments.$inferInsert;
 
-export const parentLessonProgress = mysqlTable("parent_lesson_progress", {
+export const parentLessonProgress = mysqlTable("parent_lesson_prog", {
   id: int("id").autoincrement().primaryKey(),
-  enrollmentId: int("enrollmentId").references(() => parentEducationEnrollments.id).notNull(),
+  enrollmentId: int("enrollmentId").references(() => parentEducEnrollments.id).notNull(),
   lessonId: int("lessonId").references(() => courseLessons.id).notNull(),
   completed: boolean("completed").default(false),
   completedAt: timestamp("completedAt"),

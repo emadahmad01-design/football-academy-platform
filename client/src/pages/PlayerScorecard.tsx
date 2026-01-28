@@ -29,36 +29,58 @@ import { toast } from "sonner";
 
 // Radar chart component for skill visualization
 function SkillRadar({ skills }: { skills: { name: string; value: number }[] }) {
-  const size = 200;
+  const size = 280;
   const center = size / 2;
-  const radius = 80;
+  const radius = 85;
+  
+  // Return empty SVG if no skills
+  if (!skills || skills.length === 0) {
+    return (
+      <svg width={size} height={size} className="mx-auto">
+        <text x={center} y={center} textAnchor="middle" dominantBaseline="middle" className="text-sm fill-muted-foreground">
+          No data
+        </text>
+      </svg>
+    );
+  }
+  
   const angleStep = (2 * Math.PI) / skills.length;
 
-  const points = skills.map((skill, i) => {
+  // Ensure all skill values are valid numbers
+  const validSkills = skills.map(skill => ({
+    ...skill,
+    value: Number.isFinite(skill.value) ? Math.max(0, Math.min(100, skill.value)) : 50
+  }));
+
+  const points = validSkills.map((skill, i) => {
     const angle = i * angleStep - Math.PI / 2;
     const r = (skill.value / 100) * radius;
     return {
       x: center + r * Math.cos(angle),
       y: center + r * Math.sin(angle),
-      labelX: center + (radius + 25) * Math.cos(angle),
-      labelY: center + (radius + 25) * Math.sin(angle),
+      labelX: center + (radius + 35) * Math.cos(angle),
+      labelY: center + (radius + 35) * Math.sin(angle),
       name: skill.name,
       value: skill.value,
     };
   });
 
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
+  // Build path safely - only if we have points
+  const pathD = points.length > 0 
+    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z'
+    : '';
 
   // Background grid
   const gridLevels = [0.25, 0.5, 0.75, 1];
   const gridPaths = gridLevels.map(level => {
-    const gridPoints = skills.map((_, i) => {
+    const gridPoints = validSkills.map((_, i) => {
       const angle = i * angleStep - Math.PI / 2;
       const r = level * radius;
       return { x: center + r * Math.cos(angle), y: center + r * Math.sin(angle) };
     });
+    if (gridPoints.length === 0) return '';
     return gridPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
-  });
+  }).filter(p => p !== '');
 
   return (
     <svg width={size} height={size} className="mx-auto">
@@ -67,7 +89,7 @@ function SkillRadar({ skills }: { skills: { name: string; value: number }[] }) {
         <path key={i} d={d} fill="none" stroke="currentColor" strokeOpacity={0.1} />
       ))}
       {/* Axes */}
-      {skills.map((_, i) => {
+      {validSkills.map((_, i) => {
         const angle = i * angleStep - Math.PI / 2;
         return (
           <line
@@ -82,7 +104,7 @@ function SkillRadar({ skills }: { skills: { name: string; value: number }[] }) {
         );
       })}
       {/* Data polygon */}
-      <path d={pathD} fill="hsl(var(--primary))" fillOpacity={0.3} stroke="hsl(var(--primary))" strokeWidth={2} />
+      {pathD && <path d={pathD} fill="hsl(var(--primary))" fillOpacity={0.3} stroke="hsl(var(--primary))" strokeWidth={2} />}
       {/* Points */}
       {points.map((p, i) => (
         <circle key={i} cx={p.x} cy={p.y} r={4} fill="hsl(var(--primary))" />
@@ -95,7 +117,7 @@ function SkillRadar({ skills }: { skills: { name: string; value: number }[] }) {
           y={p.labelY}
           textAnchor="middle"
           dominantBaseline="middle"
-          className="text-[10px] fill-muted-foreground"
+          className="text-xs fill-current font-medium"
         >
           {p.name}
         </text>
@@ -171,6 +193,11 @@ export default function PlayerScorecard() {
     { enabled: playerId > 0 }
   );
 
+  const { data: performanceData, isLoading: perfLoading } = trpc.performance.getPlayerSkills.useQuery(
+    { playerId },
+    { enabled: playerId > 0 }
+  );
+
   const { data: matchStats } = trpc.matchStats.getByPlayer.useQuery(
     { playerId },
     { enabled: playerId > 0 }
@@ -196,7 +223,7 @@ export default function PlayerScorecard() {
     return null;
   }
 
-  const isLoading = playerLoading || skillsLoading;
+  const isLoading = playerLoading || skillsLoading || perfLoading;
 
   // Calculate career stats from match history
   const careerStats = matchStats?.reduce(
@@ -209,24 +236,27 @@ export default function PlayerScorecard() {
     { matches: 0, goals: 0, assists: 0, minutesPlayed: 0 }
   ) || { matches: 0, goals: 0, assists: 0, minutesPlayed: 0 };
 
-  // Technical skills for radar chart
-  const technicalSkills = skillScore ? [
-    { name: "Control", value: skillScore.ballControl || 50 },
-    { name: "Touch", value: skillScore.firstTouch || 50 },
-    { name: "Dribble", value: skillScore.dribbling || 50 },
-    { name: "Pass", value: skillScore.passing || 50 },
-    { name: "Shoot", value: skillScore.shooting || 50 },
-    { name: "Cross", value: skillScore.crossing || 50 },
+  // Use skillScore if available, otherwise fall back to performanceData.latestSkills
+  const displaySkillScore = skillScore ?? performanceData?.latestSkills ?? null;
+
+  // Technical skills for radar chart - use displaySkillScore individual fields
+  const technicalSkills = displaySkillScore ? [
+    { name: "Ball Control", value: displaySkillScore.ballControl || 50 },
+    { name: "First Touch", value: displaySkillScore.firstTouch || 50 },
+    { name: "Dribbling", value: displaySkillScore.dribbling || 50 },
+    { name: "Passing", value: displaySkillScore.passing || 50 },
+    { name: "Shooting", value: displaySkillScore.shooting || 50 },
+    { name: "Crossing", value: displaySkillScore.crossing || 50 },
   ] : [];
 
-  // Physical skills for radar chart
-  const physicalSkills = skillScore ? [
-    { name: "Speed", value: skillScore.speed || 50 },
-    { name: "Accel", value: skillScore.acceleration || 50 },
-    { name: "Agility", value: skillScore.agility || 50 },
-    { name: "Stamina", value: skillScore.stamina || 50 },
-    { name: "Strength", value: skillScore.strength || 50 },
-    { name: "Jump", value: skillScore.jumping || 50 },
+  // Physical skills for radar chart - use displaySkillScore individual fields
+  const physicalSkills = displaySkillScore ? [
+    { name: "Speed", value: displaySkillScore.speed || 50 },
+    { name: "Acceleration", value: displaySkillScore.acceleration || 50 },
+    { name: "Agility", value: displaySkillScore.agility || 50 },
+    { name: "Stamina", value: displaySkillScore.stamina || 50 },
+    { name: "Strength", value: displaySkillScore.strength || 50 },
+    { name: "Jumping", value: displaySkillScore.jumping || 50 },
   ] : [];
 
   return (
@@ -293,12 +323,12 @@ export default function PlayerScorecard() {
                           stroke="hsl(var(--primary))"
                           strokeWidth="8"
                           fill="none"
-                          strokeDasharray={`${(skillScore?.overallRating || 50) * 2.51} 251`}
+                          strokeDasharray={`${((displaySkillScore?.overallRating ?? performanceData?.overallRating) || 50) * 2.51} 251`}
                           strokeLinecap="round"
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-2xl font-bold">{skillScore?.overallRating || 50}</span>
+                        <span className="text-2xl font-bold">{displaySkillScore?.overallRating ?? performanceData?.overallRating ?? 50}</span>
                       </div>
                     </div>
                     <div className="text-sm text-muted-foreground mt-1">Overall Rating</div>
@@ -306,7 +336,7 @@ export default function PlayerScorecard() {
 
                   {/* Potential */}
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-primary">{skillScore?.potentialRating || 60}</div>
+                    <div className="text-3xl font-bold text-primary">{displaySkillScore?.potentialRating ?? skillScore?.potentialRating ?? 60}</div>
                     <div className="text-sm text-muted-foreground">Potential</div>
                   </div>
                 </div>
@@ -379,13 +409,13 @@ export default function PlayerScorecard() {
                       <CardTitle>Skill Breakdown</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <SkillBar name="Ball Control" value={skillScore?.ballControl || 50} />
-                      <SkillBar name="First Touch" value={skillScore?.firstTouch || 50} />
-                      <SkillBar name="Dribbling" value={skillScore?.dribbling || 50} />
-                      <SkillBar name="Passing" value={skillScore?.passing || 50} />
-                      <SkillBar name="Shooting" value={skillScore?.shooting || 50} />
-                      <SkillBar name="Crossing" value={skillScore?.crossing || 50} />
-                      <SkillBar name="Heading" value={skillScore?.heading || 50} />
+                      <SkillBar name="Ball Control" value={displaySkillScore?.ballControl || 50} />
+                      <SkillBar name="First Touch" value={displaySkillScore?.firstTouch || 50} />
+                      <SkillBar name="Dribbling" value={displaySkillScore?.dribbling || 50} />
+                      <SkillBar name="Passing" value={displaySkillScore?.passing || 50} />
+                      <SkillBar name="Shooting" value={displaySkillScore?.shooting || 50} />
+                      <SkillBar name="Crossing" value={displaySkillScore?.crossing || 50} />
+                      <SkillBar name="Heading" value={displaySkillScore?.heading || 50} />
                     </CardContent>
                   </Card>
 
@@ -399,18 +429,18 @@ export default function PlayerScorecard() {
                     </CardHeader>
                     <CardContent>
                       <FootPreference
-                        left={skillScore?.leftFootScore || 50}
-                        right={skillScore?.rightFootScore || 50}
+                        left={displaySkillScore?.leftFootScore || 50}
+                        right={displaySkillScore?.rightFootScore || 50}
                         preferred={player.preferredFoot || 'right'}
                       />
                       <div className="mt-4 pt-4 border-t">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm">Two-Footed Ability</span>
-                          <span className="font-bold">{skillScore?.twoFootedScore || 50}%</span>
+                          <span className="font-bold">{displaySkillScore?.twoFootedScore || 50}%</span>
                         </div>
-                        <Progress value={skillScore?.twoFootedScore || 50} className="h-3" />
+                        <Progress value={displaySkillScore?.twoFootedScore || 50} className="h-3" />
                         <p className="text-sm text-muted-foreground mt-2">
-                          Weak foot usage: {skillScore?.weakFootUsage || 0}% of total touches
+                          Weak foot usage: {displaySkillScore?.weakFootUsage || 0}% of total touches
                         </p>
                       </div>
                     </CardContent>
@@ -439,12 +469,12 @@ export default function PlayerScorecard() {
                       <CardTitle>Physical Breakdown</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <SkillBar name="Speed" value={skillScore?.speed || 50} icon={Zap} />
-                      <SkillBar name="Acceleration" value={skillScore?.acceleration || 50} icon={TrendingUp} />
-                      <SkillBar name="Agility" value={skillScore?.agility || 50} icon={Activity} />
-                      <SkillBar name="Stamina" value={skillScore?.stamina || 50} icon={Timer} />
-                      <SkillBar name="Strength" value={skillScore?.strength || 50} icon={Shield} />
-                      <SkillBar name="Jumping" value={skillScore?.jumping || 50} icon={TrendingUp} />
+                      <SkillBar name="Speed" value={displaySkillScore?.speed || 50} icon={Zap} />
+                      <SkillBar name="Acceleration" value={displaySkillScore?.acceleration || 50} icon={TrendingUp} />
+                      <SkillBar name="Agility" value={displaySkillScore?.agility || 50} icon={Activity} />
+                      <SkillBar name="Stamina" value={displaySkillScore?.stamina || 50} icon={Timer} />
+                      <SkillBar name="Strength" value={displaySkillScore?.strength || 50} icon={Shield} />
+                      <SkillBar name="Jumping" value={displaySkillScore?.jumping || 50} icon={TrendingUp} />
                     </CardContent>
                   </Card>
                 </div>
@@ -462,11 +492,11 @@ export default function PlayerScorecard() {
                       <CardDescription>Decision making and game intelligence</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <SkillBar name="Positioning" value={skillScore?.positioning || 50} />
-                      <SkillBar name="Vision" value={skillScore?.vision || 50} />
-                      <SkillBar name="Composure" value={skillScore?.composure || 50} />
-                      <SkillBar name="Decision Making" value={skillScore?.decisionMaking || 50} />
-                      <SkillBar name="Work Rate" value={skillScore?.workRate || 50} />
+                      <SkillBar name="Positioning" value={displaySkillScore?.positioning || 50} />
+                      <SkillBar name="Vision" value={displaySkillScore?.vision || 50} />
+                      <SkillBar name="Composure" value={displaySkillScore?.composure || 50} />
+                      <SkillBar name="Decision Making" value={displaySkillScore?.decisionMaking || 50} />
+                      <SkillBar name="Work Rate" value={displaySkillScore?.workRate || 50} />
                     </CardContent>
                   </Card>
 
@@ -476,7 +506,7 @@ export default function PlayerScorecard() {
                     </CardHeader>
                     <CardContent className="flex items-center justify-center py-8">
                       <div className="text-center">
-                        <div className="text-6xl font-bold text-primary">{skillScore?.mentalOverall || 50}</div>
+                        <div className="text-6xl font-bold text-primary">{displaySkillScore?.mentalOverall || 50}</div>
                         <div className="text-muted-foreground mt-2">Mental Score</div>
                       </div>
                     </CardContent>
@@ -496,9 +526,9 @@ export default function PlayerScorecard() {
                       <CardDescription>Defensive capabilities and awareness</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <SkillBar name="Marking" value={skillScore?.marking || 50} />
-                      <SkillBar name="Tackling" value={skillScore?.tackling || 50} />
-                      <SkillBar name="Interceptions" value={skillScore?.interceptions || 50} />
+                      <SkillBar name="Marking" value={displaySkillScore?.marking || 50} />
+                      <SkillBar name="Tackling" value={displaySkillScore?.tackling || 50} />
+                      <SkillBar name="Interceptions" value={displaySkillScore?.interceptions || 50} />
                     </CardContent>
                   </Card>
 
@@ -508,7 +538,7 @@ export default function PlayerScorecard() {
                     </CardHeader>
                     <CardContent className="flex items-center justify-center py-8">
                       <div className="text-center">
-                        <div className="text-6xl font-bold text-primary">{skillScore?.defensiveOverall || 50}</div>
+                        <div className="text-6xl font-bold text-primary">{displaySkillScore?.defensiveOverall || 50}</div>
                         <div className="text-muted-foreground mt-2">Defensive Score</div>
                       </div>
                     </CardContent>

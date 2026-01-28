@@ -21,7 +21,7 @@ import {
 import { AdvancedFeaturesWidgets } from "@/components/AdvancedFeaturesWidgets";
 import { OnboardingTour } from "@/components/OnboardingTour";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 function StatCard({ 
   title, 
@@ -101,6 +101,7 @@ function QuickActionCard({
 }
 
 function StaffDashboard() {
+  const [, setLocation] = useLocation();
   const { data: stats, isLoading } = trpc.analytics.getAcademyStats.useQuery();
 
   if (isLoading) {
@@ -168,36 +169,42 @@ function StaffDashboard() {
             description="Log player metrics from training or match"
             icon={Activity}
             color="primary"
+            onClick={() => setLocation("/performance")}
           />
           <QuickActionCard
             title="Mental Assessment"
             description="Conduct psychological evaluation"
             icon={Brain}
             color="chart-2"
+            onClick={() => setLocation("/mental")}
           />
           <QuickActionCard
             title="Create Workout"
             description="Design a new training plan"
             icon={Dumbbell}
             color="chart-3"
+            onClick={() => setLocation("/coach/training-planner")}
           />
           <QuickActionCard
             title="Meal Planning"
             description="Create nutrition plan for players"
             icon={Apple}
             color="chart-4"
+            onClick={() => setLocation("/nutrition")}
           />
           <QuickActionCard
             title="Set Goals"
             description="Define development objectives"
             icon={Target}
             color="accent"
+            onClick={() => setLocation("/idp")}
           />
           <QuickActionCard
             title="Award Achievement"
             description="Recognize player accomplishments"
             icon={Trophy}
             color="primary"
+            onClick={() => setLocation("/rewards")}
           />
           <Link href="/coach-education/laws">
             <QuickActionCard

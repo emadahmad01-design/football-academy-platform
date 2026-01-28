@@ -47,6 +47,19 @@ class OAuthService {
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
+    // DEV MODE BYPASS
+    if (!ENV.isProduction && code === "dev-code") {
+      console.log("[OAuth] Dev mode: bypassing token exchange");
+      return {
+        accessToken: "dev-access-token",
+        expiresIn: 3600,
+        refreshToken: "dev-refresh-token",
+        tokenType: "Bearer",
+        scope: "openid profile email",
+        idToken: "dev-id-token"
+      };
+    }
+
     const payload: ExchangeTokenRequest = {
       clientId: ENV.appId,
       grantType: "authorization_code",
@@ -65,6 +78,19 @@ class OAuthService {
   async getUserInfoByToken(
     token: ExchangeTokenResponse
   ): Promise<GetUserInfoResponse> {
+    // DEV MODE BYPASS
+    if (!ENV.isProduction && token.accessToken === "dev-access-token") {
+      console.log("[OAuth] Dev mode: bypassing user info fetch");
+      return {
+        openId: "dev-user-id",
+        name: "Dev User",
+        email: "dev@example.com",
+        platform: "dev",
+        loginMethod: "dev",
+        projectId: ENV.appId
+      };
+    }
+
     const { data } = await this.client.post<GetUserInfoResponse>(
       GET_USER_INFO_PATH,
       {
@@ -227,6 +253,16 @@ class SDKServer {
         name,
       };
     } catch (error) {
+      // DEV MODE BYPASS: If verification fails in dev mode, return dev user
+      if (!ENV.isProduction) {
+        console.log("[Auth] Dev mode: Session verification failed, using dev user");
+        return {
+          openId: "dev-user-id",
+          appId: process.env.VITE_APP_ID || "dev-app",
+          name: "Dev User",
+        };
+      }
+      
       console.warn("[Auth] Session verification failed", String(error));
       return null;
     }
@@ -235,6 +271,26 @@ class SDKServer {
   async getUserInfoWithJwt(
     jwtToken: string
   ): Promise<GetUserInfoWithJwtResponse> {
+    // DEV MODE BYPASS: Check if it's our dev token
+    if (!ENV.isProduction && jwtToken) {
+      try {
+        const secretKey = this.getSessionSecret();
+        const { payload } = await jwtVerify(jwtToken, secretKey, { algorithms: ["HS256"] });
+        const typedPayload = payload as Record<string, unknown>;
+        if (typedPayload.openId === "dev-user-id") {
+          return {
+            openId: "dev-user-id",
+            name: "Dev User",
+            email: "dev@example.com",
+            platform: "dev",
+            loginMethod: "dev"
+          } as any;
+        }
+      } catch (e) {
+        // Not a dev token, continue with normal flow
+      }
+    }
+
     const payload: GetUserInfoWithJwtRequest = {
       jwtToken,
       projectId: ENV.appId,

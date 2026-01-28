@@ -31,7 +31,7 @@ import { recommendPositions, getTopPositionRecommendations, getPositionTransitio
 import { 
   MatchEventSession, homePageContent, performanceMetrics, forumPosts, forumVotes, forumReplies, forumCategories,
   players, playerMatchStats, teams, matches, trainingSessions, injuries, notifications, users,
-  playerSkillScores, matchEvents, testimonials, privateTrainingBookings, coachProfiles, contactSubmissions,
+  playerSkillScores, matchEvents, testimonials, privateTrainingBookings, coachProfiles,
   userStreaks, streakRewards, blogPosts, enrollmentSubmissions, careerApplications
 } from "../drizzle/schema";
 import { desc, eq, sql, and, or, gte, lte, like, isNull, asc, inArray } from "drizzle-orm";
@@ -157,7 +157,7 @@ const xgAnalyticsRouter = router({
         situation: z.enum(['open_play', 'corner', 'free_kick', 'penalty', 'counter_attack']).optional(),
       }))
       .mutation(async ({ input }) => {
-        const id = await db.createMatchShot(input);
+        const id = await db.createMatchShot({...input, xGValue: input.xGValue.toString()});
         return { success: true, id };
       }),
     
@@ -181,7 +181,7 @@ const xgAnalyticsRouter = router({
         passType: z.enum(['short', 'long', 'through_ball', 'cross', 'corner', 'free_kick']).optional(),
       }))
       .mutation(async ({ input }) => {
-        const id = await db.createMatchPass(input);
+        const id = await db.createMatchPass({...input, xAValue: input.xAValue.toString()});
         return { success: true, id };
       }),
     
@@ -371,18 +371,14 @@ const blogRouter = router({  getAll: publicProcedure
         })
         .from(blogPosts)
         .innerJoin(users, eq(blogPosts.authorId, users.id))
-        .where(eq(blogPosts.status, 'published'))
-        .orderBy(desc(blogPosts.publishedAt));
-      
-      if (input.category) {
-        query = query.where(and(
+        .where(input.category ? and(
           eq(blogPosts.status, 'published'),
           eq(blogPosts.category, input.category)
-        ));
-      }
+        ) : eq(blogPosts.status, 'published'))
+        .orderBy(desc(blogPosts.publishedAt))
+        .limit(input.limit);
       
-      const result = await query.limit(input.limit);
-      return result;
+      return query;
     }),
   
   getBySlug: publicProcedure
@@ -728,7 +724,11 @@ export const appRouter = router({
         photoUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const updated = await db.updatePlayer(input.id, input);
+        const updateData: any = {...input};
+        if (updateData.dateOfBirth) {
+          updateData.dateOfBirth = new Date(updateData.dateOfBirth);
+        }
+        const updated = await db.updatePlayer(input.id, updateData);
         // Invalidate player cache after update
         await cacheInvalidation.smartInvalidate({ type: "player", playerId: input.id, comprehensive: true });
         return updated;
@@ -948,9 +948,16 @@ export const appRouter = router({
         if (!database) return [];
         return database.select().from(performanceMetrics).orderBy(desc(performanceMetrics.sessionDate)).limit(1000);
       }),
-    getPlayerMetrics: staffProcedure
+    getPlayerMetrics: protectedProcedure
       .input(z.object({ playerId: z.number(), limit: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
+        // Parents can only view their own children
+        if (ctx.user.role === 'parent') {
+          const hasAccess = await db.checkParentPlayerAccess(ctx.user.id, input.playerId);
+          if (!hasAccess) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Access denied' });
+          }
+        }
         return db.getPlayerPerformanceMetrics(input.playerId, input.limit);
       }),
     getLatest: staffProcedure
@@ -1961,7 +1968,8 @@ export const appRouter = router({
         linkedinUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        const database = getDb();
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         const [result] = await database.insert(careerApplications).values({
           fullName: input.fullName,
           email: input.email,
@@ -1979,26 +1987,27 @@ export const appRouter = router({
         // Notify admin about new application
         await notifyOwner({
           title: 'New Career Application',
-          message: `${input.fullName} applied for ${input.position}`,
-          type: 'info',
+          content: `${input.fullName} applied for ${input.position}`,
         });
         
         return { success: true, id: result.insertId };
       }),
     
     getAll: adminProcedure.query(async () => {
-      const database = getDb();
+      const database = await getDb();
+      if (!database) return [];
       return database.select().from(careerApplications).orderBy(desc(careerApplications.createdAt));
     }),
     
     updateStatus: adminProcedure
       .input(z.object({
         id: z.number(),
-        status: z.enum(['pending', 'under_review', 'approved', 'rejected']),
+        status: z.enum(['pending', 'reviewing', 'shortlisted', 'interviewed', 'accepted', 'rejected']),
         adminNotes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const database = getDb();
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get application details for email
         const [application] = await database.select()
@@ -3811,6 +3820,11 @@ export const appRouter = router({
       return db.getAllAcademyVideos();
     }),
 
+    // Get all gallery videos (public)
+    getGallery: publicProcedure.query(async () => {
+      return db.getAllGalleryVideos();
+    }),
+
     // Get videos by category (public)
     getByCategory: publicProcedure
       .input(z.object({ category: z.enum(['hero', 'gallery_drills', 'gallery_highlights', 'gallery_skills', 'training', 'other']) }))
@@ -4644,7 +4658,7 @@ export const appRouter = router({
           tacticalOptions: JSON.stringify(input.tacticalOptions),
           selectedTacticId: input.selectedTacticId,
           matchId: input.matchId,
-          matchDate: input.matchDate,
+          matchDate: input.matchDate ? new Date(input.matchDate) : undefined,
           description: input.notes,
           playerPositions: JSON.stringify([]), // Empty for AI plans
           isPublic: false,
@@ -5216,8 +5230,9 @@ export const appRouter = router({
           .where(eq(quizQuestions.courseId, input.courseId));
         
         let correct = 0;
+        const answerLetters = ['A', 'B', 'C', 'D'];
         questions.forEach((q, index) => {
-          if (input.answers[index] === q.correctAnswer) {
+          if (input.answers[index] !== undefined && answerLetters[input.answers[index]] === q.correctAnswer) {
             correct++;
           }
         });
@@ -5907,21 +5922,21 @@ export const appRouter = router({
               .limit(5);
             
             contextData += `\n\n**Player Context:**\n`;
-            contextData += `- Name: ${player[0].name}\n`;
+            contextData += `- Name: ${player[0].firstName} ${player[0].lastName}\n`;
             contextData += `- Position: ${player[0].position}\n`;
             contextData += `- Age: ${player[0].dateOfBirth ? new Date().getFullYear() - new Date(player[0].dateOfBirth).getFullYear() : 'Unknown'}\n`;
             
             if (stats.length > 0) {
-              const avgTechnical = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.technicalScore || 0), 0) / stats.length;
-              const avgPhysical = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.physicalScore || 0), 0) / stats.length;
-              const avgTactical = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.tacticalScore || 0), 0) / stats.length;
-              const avgMental = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.mentalScore || 0), 0) / stats.length;
+              const avgTechnical = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.technicalOverall || 0), 0) / stats.length;
+              const avgPhysical = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.physicalOverall || 0), 0) / stats.length;
+              const avgMental = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.mentalOverall || 0), 0) / stats.length;
+              const avgDefensive = stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.defensiveOverall || 0), 0) / stats.length;
               
               contextData += `\n**Recent Performance (Last 5 sessions):**\n`;
               contextData += `- Technical Score: ${avgTechnical.toFixed(1)}/100\n`;
               contextData += `- Physical Score: ${avgPhysical.toFixed(1)}/100\n`;
-              contextData += `- Tactical Score: ${avgTactical.toFixed(1)}/100\n`;
               contextData += `- Mental Score: ${avgMental.toFixed(1)}/100\n`;
+              contextData += `- Defensive Score: ${avgDefensive.toFixed(1)}/100\n`;
             }
           }
         }
@@ -5971,37 +5986,40 @@ Provide practical, actionable advice that coaches can implement immediately. Use
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get player data
-        const player = await db.select().from(players).where(eq(players.id, input.playerId)).limit(1);
+        const player = await database.select().from(players).where(eq(players.id, input.playerId)).limit(1);
         if (!player[0]) {
           throw new Error('Player not found');
         }
         
         // Get recent stats
-        const stats = await db.select().from(playerSkillScores)
+        const stats = await database.select().from(playerSkillScores)
           .where(eq(playerSkillScores.playerId, input.playerId))
           .orderBy(desc(playerSkillScores.assessmentDate))
           .limit(10);
         
         // Get recent matches
-        const matches = await db.select()
+        const matches = await database.select()
           .from(playerMatchStats)
           .where(eq(playerMatchStats.playerId, input.playerId))
           .orderBy(desc(playerMatchStats.createdAt))
           .limit(5);
         
+        const playerName = `${player[0].firstName} ${player[0].lastName}`;
         const contextData = `**Player Analysis Request**
 
-Player: ${player[0].name}
+Player: ${playerName}
 Position: ${player[0].position}
 Age: ${player[0].dateOfBirth ? new Date().getFullYear() - new Date(player[0].dateOfBirth).getFullYear() : 'Unknown'}
 
 **Performance Data (Last 10 sessions):**
-${stats.map((s, i) => `Session ${i + 1}: Technical ${s.technicalScore}, Physical ${s.physicalScore}, Tactical ${s.tacticalScore}, Mental ${s.mentalScore}`).join('\n')}
+${stats.map((s: typeof stats[0], i: number) => `Session ${i + 1}: Technical ${s.technicalOverall}, Physical ${s.physicalOverall}, Mental ${s.mentalOverall}, Overall ${s.overallRating}`).join('\n')}
 
 **Recent Match Performance (Last 5 matches):**
-${matches.map((m, i) => `Match ${i + 1}: Goals ${m.goals}, Assists ${m.assists}, Passes ${m.passes}, Shots ${m.shots}`).join('\n')}`;
+${matches.map((m: typeof matches[0], i: number) => `Match ${i + 1}: Goals ${m.goals}, Assists ${m.assists}, Passes ${m.passes}, Shots ${m.shots}`).join('\n')}`;
         
         const response = await invokeLLM({
           messages: [
@@ -6033,7 +6051,7 @@ ${matches.map((m, i) => `Match ${i + 1}: Goals ${m.goals}, Assists ${m.assists},
         
         return { 
           analysis, 
-          playerName: player[0].name,
+          playerName,
           strengths: structuredAnalysis.strengths || [],
           weaknesses: structuredAnalysis.weaknesses || [],
           recommendations: structuredAnalysis.recommendations || []
@@ -6050,44 +6068,46 @@ ${matches.map((m, i) => `Match ${i + 1}: Goals ${m.goals}, Assists ${m.assists},
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get team data
-        const team = await db.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
+        const team = await database.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
         if (!team[0]) {
           throw new Error('Team not found');
         }
         
         // Get team players with their stats
-        const teamPlayers = await db.select()
+        const teamPlayers = await database.select()
           .from(players)
           .where(eq(players.teamId, input.teamId));
         
         // Get recent performance stats for each player
         const playerStatsData = await Promise.all(
-          teamPlayers.map(async (player) => {
-            const stats = await db.select().from(playerSkillScores)
+          teamPlayers.map(async (player: typeof teamPlayers[0]) => {
+            const stats = await database.select().from(playerSkillScores)
               .where(eq(playerSkillScores.playerId, player.id))
               .orderBy(desc(playerSkillScores.assessmentDate))
               .limit(3);
             
-            const avgTechnical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / stats.length : 0;
-            const avgPhysical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / stats.length : 0;
-            const avgTactical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / stats.length : 0;
+            const avgTechnical = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.technicalOverall || 0), 0) / stats.length : 0;
+            const avgPhysical = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.physicalOverall || 0), 0) / stats.length : 0;
+            const avgMental = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.mentalOverall || 0), 0) / stats.length : 0;
             
             return {
-              name: player.name,
+              name: `${player.firstName} ${player.lastName}`,
               position: player.position,
               technical: avgTechnical.toFixed(1),
               physical: avgPhysical.toFixed(1),
-              tactical: avgTactical.toFixed(1)
+              mental: avgMental.toFixed(1)
             };
           })
         );
         
         // Get recent match results
-        let recentMatches = [];
+        let recentMatches: typeof matches.$inferSelect[] = [];
         if (input.matchId) {
-          recentMatches = await db.select()
+          recentMatches = await database.select()
             .from(matches)
             .where(eq(matches.teamId, input.teamId))
             .orderBy(desc(matches.matchDate))
@@ -6103,10 +6123,10 @@ ${input.currentScore ? `Current Score: ${input.currentScore}` : ''}
 ${input.matchMinute ? `Match Minute: ${input.matchMinute}` : ''}
 
 **Squad Analysis:**
-${playerStatsData.map(p => `${p.name} (${p.position}): Technical ${p.technical}, Physical ${p.physical}, Tactical ${p.tactical}`).join('\n')}
+${playerStatsData.map((p: typeof playerStatsData[0]) => `${p.name} (${p.position}): Technical ${p.technical}, Physical ${p.physical}, Mental ${p.mental}`).join('\n')}
 
 **Recent Form:**
-${recentMatches.length > 0 ? recentMatches.map((m, i) => `Match ${i + 1}: ${m.result} (${m.goalsFor}-${m.goalsAgainst})`).join('\n') : 'No recent match data'}`;
+${recentMatches.length > 0 ? recentMatches.map((m: typeof recentMatches[0], i: number) => `Match ${i + 1}: ${m.result?.toUpperCase() || 'Unknown'} vs ${m.opponent || 'Unknown'}`).join('\n') : 'No recent match data'}`;
         
         const response = await invokeLLM({
           messages: [
@@ -6132,22 +6152,24 @@ ${recentMatches.length > 0 ? recentMatches.map((m, i) => `Match ${i + 1}: ${m.re
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get team data
-        const team = await db.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
+        const team = await database.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
         if (!team[0]) {
           throw new Error('Team not found');
         }
         
         // Get all team players
-        const teamPlayers = await db.select()
+        const teamPlayers = await database.select()
           .from(players)
           .where(eq(players.teamId, input.teamId));
         
         // Analyze team weaknesses by aggregating player stats
         const allStats = await Promise.all(
-          teamPlayers.map(async (player) => {
-          const stats = await db.select().from(playerSkillScores)
+          teamPlayers.map(async (player: typeof teamPlayers[0]) => {
+          const stats = await database.select().from(playerSkillScores)
             .where(eq(playerSkillScores.playerId, player.id))
             .orderBy(desc(playerSkillScores.assessmentDate))
             .limit(5);
@@ -6156,20 +6178,20 @@ ${recentMatches.length > 0 ? recentMatches.map((m, i) => `Match ${i + 1}: ${m.re
         );
         
         const flatStats = allStats.flat();
-        const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / flatStats.length : 0;
-        const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / flatStats.length : 0;
-        const avgTactical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / flatStats.length : 0;
-        const avgMental = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.mentalScore || 0), 0) / flatStats.length : 0;
+        const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.technicalOverall || 0), 0) / flatStats.length : 0;
+        const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.physicalOverall || 0), 0) / flatStats.length : 0;
+        const avgMental = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.mentalOverall || 0), 0) / flatStats.length : 0;
+        const avgDefensive = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.defensiveOverall || 0), 0) / flatStats.length : 0;
         
         // Get recent matches to understand performance context
-        const recentMatches = await db.select()
+        const recentMatches = await database.select()
           .from(matches)
           .where(eq(matches.teamId, input.teamId))
           .orderBy(desc(matches.matchDate))
           .limit(5);
         
-        const wins = recentMatches.filter(m => m.result === 'win').length;
-        const losses = recentMatches.filter(m => m.result === 'loss').length;
+        const wins = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'win').length;
+        const losses = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'loss').length;
         
         const contextData = `**Training Plan Generation Request**
 
@@ -6182,11 +6204,11 @@ ${input.focusAreas ? `Focus Areas: ${input.focusAreas.join(', ')}` : 'All areas'
 **Team Performance Analysis:**
 - Technical Average: ${avgTechnical.toFixed(1)}/100 ${avgTechnical < 70 ? '⚠️ NEEDS IMPROVEMENT' : avgTechnical > 80 ? '✅ STRONG' : '➡️ ADEQUATE'}
 - Physical Average: ${avgPhysical.toFixed(1)}/100 ${avgPhysical < 70 ? '⚠️ NEEDS IMPROVEMENT' : avgPhysical > 80 ? '✅ STRONG' : '➡️ ADEQUATE'}
-- Tactical Average: ${avgTactical.toFixed(1)}/100 ${avgTactical < 70 ? '⚠️ NEEDS IMPROVEMENT' : avgTactical > 80 ? '✅ STRONG' : '➡️ ADEQUATE'}
 - Mental Average: ${avgMental.toFixed(1)}/100 ${avgMental < 70 ? '⚠️ NEEDS IMPROVEMENT' : avgMental > 80 ? '✅ STRONG' : '➡️ ADEQUATE'}
+- Defensive Average: ${avgDefensive.toFixed(1)}/100 ${avgDefensive < 70 ? '⚠️ NEEDS IMPROVEMENT' : avgDefensive > 80 ? '✅ STRONG' : '➡️ ADEQUATE'}
 
 **Recent Match Results (Last 5):**
-${recentMatches.map((m, i) => `Match ${i + 1}: ${m.result?.toUpperCase()} ${m.goalsFor}-${m.goalsAgainst} vs ${m.opponent || 'Unknown'}`).join('\n')}
+${recentMatches.map((m: typeof recentMatches[0], i: number) => `Match ${i + 1}: ${m.result?.toUpperCase() || 'N/A'} vs ${m.opponent || 'Unknown'}`).join('\n')}
 Form: ${wins}W ${losses}L (${((wins / recentMatches.length) * 100).toFixed(0)}% win rate)`;
         
         const systemPrompt = `You are an expert football training coordinator. Create a detailed ${input.duration === 'week' ? 'weekly' : 'monthly'} training plan that:
@@ -6222,8 +6244,8 @@ Be practical and implementable by academy coaches.`;
           teamStats: {
             technical: avgTechnical.toFixed(1),
             physical: avgPhysical.toFixed(1),
-            tactical: avgTactical.toFixed(1),
-            mental: avgMental.toFixed(1)
+            mental: avgMental.toFixed(1),
+            defensive: avgDefensive.toFixed(1)
           }
         };
       }),
@@ -6237,56 +6259,49 @@ Be practical and implementable by academy coaches.`;
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get match data
-        const match = await db.select().from(matches).where(eq(matches.id, input.matchId)).limit(1);
+        const match = await database.select().from(matches).where(eq(matches.id, input.matchId)).limit(1);
         if (!match[0]) {
           throw new Error('Match not found');
         }
         
         // Get match player stats
-        const playerStats = await db.select()
+        const playerStats = await database.select()
           .from(playerMatchStats)
           .where(eq(playerMatchStats.matchId, input.matchId));
         
         // Get player details
         const playerDetails = await Promise.all(
-          playerStats.map(async (stat) => {
-            const player = await db.select().from(players).where(eq(players.id, stat.playerId)).limit(1);
+          playerStats.map(async (stat: typeof playerStats[0]) => {
+            const player = await database.select().from(players).where(eq(players.id, stat.playerId)).limit(1);
             return {
-              name: player[0]?.name || 'Unknown',
-              position: player[0]?.position || 'Unknown',
-              ...stat
+              ...stat,
+              name: player[0] ? `${player[0].firstName} ${player[0].lastName}` : 'Unknown',
+              position: player[0]?.position || 'Unknown'
             };
           })
         );
         
-        // Get match events if available
-        const events = await db.select()
-          .from(matchEvents)
-          .where(eq(matchEvents.matchId, input.matchId))
-          .orderBy(matchEvents.minute);
+        // Note: matchEvents table doesn't have matchId field, skipping events query
         
         const contextData = `**Match Report Generation Request**
 
 Match: ${match[0].opponent}
 Date: ${match[0].matchDate ? new Date(match[0].matchDate).toLocaleDateString() : 'Unknown'}
-Result: ${match[0].result?.toUpperCase() || 'Unknown'} (${match[0].goalsFor || 0}-${match[0].goalsAgainst || 0})
-Location: ${match[0].location || 'Unknown'}
+Result: ${match[0].result?.toUpperCase() || 'Unknown'}
+Venue: ${match[0].venue || 'Unknown'}
 Type: ${match[0].matchType || 'Unknown'}
 
 **Player Performance:**
-${playerDetails.map(p => `${p.name} (${p.position}): ${p.goals || 0} goals, ${p.assists || 0} assists, ${p.passes || 0} passes, ${p.shots || 0} shots, ${p.tackles || 0} tackles`).join('\n')}
-
-**Match Events:**
-${events.length > 0 ? events.map(e => `${e.minute}' - ${e.eventType}: ${e.description || ''}`).join('\n') : 'No detailed events recorded'}
+${playerDetails.map((p: typeof playerDetails[0]) => `${p.name} (${p.position}): ${p.goals || 0} goals, ${p.assists || 0} assists, ${p.passes || 0} passes, ${p.shots || 0} shots, ${p.tackles || 0} tackles`).join('\n')}
 
 **Match Statistics:**
-- Goals For: ${match[0].goalsFor || 0}
-- Goals Against: ${match[0].goalsAgainst || 0}
-- Total Shots: ${playerDetails.reduce((sum, p) => sum + (p.shots || 0), 0)}
-- Total Passes: ${playerDetails.reduce((sum, p) => sum + (p.passes || 0), 0)}
-- Total Tackles: ${playerDetails.reduce((sum, p) => sum + (p.tackles || 0), 0)}`;
+- Total Shots: ${playerDetails.reduce((sum: number, p: typeof playerDetails[0]) => sum + (p.shots || 0), 0)}
+- Total Passes: ${playerDetails.reduce((sum: number, p: typeof playerDetails[0]) => sum + (p.passes || 0), 0)}
+- Total Tackles: ${playerDetails.reduce((sum: number, p: typeof playerDetails[0]) => sum + (p.tackles || 0), 0)}`;
         
         const systemPrompt = `You are an expert football match analyst. Create a comprehensive match report that includes:
 
@@ -6313,8 +6328,7 @@ Be specific, data-driven, and professional. Use actual statistics provided.`;
           matchInfo: {
             opponent: match[0].opponent,
             date: match[0].matchDate,
-            result: match[0].result,
-            score: `${match[0].goalsFor || 0}-${match[0].goalsAgainst || 0}`
+            result: match[0].result
           }
         };
       }),
@@ -6328,22 +6342,24 @@ Be specific, data-driven, and professional. Use actual statistics provided.`;
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get team data
-        const team = await db.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
+        const team = await database.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
         if (!team[0]) {
           throw new Error('Team not found');
         }
         
         // Get team players
-        const teamPlayers = await db.select()
+        const teamPlayers = await database.select()
           .from(players)
           .where(eq(players.teamId, input.teamId));
         
         // Get recent performance stats
         const allStats = await Promise.all(
-          teamPlayers.map(async (player) => {
-            const stats = await db.select().from(playerSkillScores)
+          teamPlayers.map(async (player: typeof teamPlayers[0]) => {
+            const stats = await database.select().from(playerSkillScores)
               .where(eq(playerSkillScores.playerId, player.id))
               .orderBy(desc(playerSkillScores.assessmentDate))
               .limit(1);
@@ -6352,27 +6368,27 @@ Be specific, data-driven, and professional. Use actual statistics provided.`;
         );
         
         const flatStats = allStats.flat();
-        const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / flatStats.length : 0;
-        const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / flatStats.length : 0;
-        const avgTactical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / flatStats.length : 0;
-        const avgMental = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.mentalScore || 0), 0) / flatStats.length : 0;
+        const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.technicalOverall || 0), 0) / flatStats.length : 0;
+        const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.physicalOverall || 0), 0) / flatStats.length : 0;
+        const avgMental = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.mentalOverall || 0), 0) / flatStats.length : 0;
+        const avgDefensive = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.defensiveOverall || 0), 0) / flatStats.length : 0;
         
         // Get upcoming matches
-        const upcomingMatches = await db.select()
+        const upcomingMatches = await database.select()
           .from(matches)
           .where(eq(matches.teamId, input.teamId))
           .orderBy(matches.matchDate)
           .limit(5);
         
         // Get recent matches for form analysis
-        const recentMatches = await db.select()
+        const recentMatches = await database.select()
           .from(matches)
           .where(eq(matches.teamId, input.teamId))
           .orderBy(desc(matches.matchDate))
           .limit(5);
         
-        const wins = recentMatches.filter(m => m.result === 'win').length;
-        const losses = recentMatches.filter(m => m.result === 'loss').length;
+        const wins = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'win').length;
+        const losses = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'loss').length;
         
         const contextData = `**AI Training Schedule Generation**
 
@@ -6383,15 +6399,15 @@ Players: ${teamPlayers.length}
 **Current Performance Levels:**
 - Technical: ${avgTechnical.toFixed(1)}/100 ${avgTechnical < 70 ? '⚠️ PRIORITY AREA' : avgTechnical > 80 ? '✅ STRONG' : '➡️ MAINTAIN'}
 - Physical: ${avgPhysical.toFixed(1)}/100 ${avgPhysical < 70 ? '⚠️ PRIORITY AREA' : avgPhysical > 80 ? '✅ STRONG' : '➡️ MAINTAIN'}
-- Tactical: ${avgTactical.toFixed(1)}/100 ${avgTactical < 70 ? '⚠️ PRIORITY AREA' : avgTactical > 80 ? '✅ STRONG' : '➡️ MAINTAIN'}
 - Mental: ${avgMental.toFixed(1)}/100 ${avgMental < 70 ? '⚠️ PRIORITY AREA' : avgMental > 80 ? '✅ STRONG' : '➡️ MAINTAIN'}
+- Defensive: ${avgDefensive.toFixed(1)}/100 ${avgDefensive < 70 ? '⚠️ PRIORITY AREA' : avgDefensive > 80 ? '✅ STRONG' : '➡️ MAINTAIN'}
 
 **Recent Form (Last 5 matches):**
-${recentMatches.length > 0 ? recentMatches.map((m, i) => `Match ${i + 1}: ${m.result?.toUpperCase() || 'N/A'} ${m.goalsFor || 0}-${m.goalsAgainst || 0} vs ${m.opponent || 'Unknown'}`).join('\n') : 'No recent matches'}
+${recentMatches.length > 0 ? recentMatches.map((m: typeof recentMatches[0], i: number) => `Match ${i + 1}: ${m.result?.toUpperCase() || 'N/A'} vs ${m.opponent || 'Unknown'}`).join('\n') : 'No recent matches'}
 Form: ${wins}W ${losses}L (${recentMatches.length > 0 ? ((wins / recentMatches.length) * 100).toFixed(0) : 0}% win rate)
 
 **Upcoming Matches:**
-${upcomingMatches.length > 0 ? upcomingMatches.map((m, i) => `${i + 1}. ${m.opponent || 'TBD'} - ${m.matchDate ? new Date(m.matchDate).toLocaleDateString() : 'Date TBD'} (${m.matchType || 'Unknown'})`).join('\n') : 'No upcoming matches scheduled'}`;
+${upcomingMatches.length > 0 ? upcomingMatches.map((m: typeof upcomingMatches[0], i: number) => `${i + 1}. ${m.opponent || 'TBD'} - ${m.matchDate ? new Date(m.matchDate).toLocaleDateString() : 'Date TBD'} (${m.matchType || 'Unknown'})`).join('\n') : 'No upcoming matches scheduled'}`;
         
         const systemPrompt = `You are an expert football training coordinator and sports scientist. Create a detailed weekly training schedule that:
 
@@ -6428,10 +6444,10 @@ Be practical and implementable. Consider recovery needs and match preparation.`;
           teamStats: {
             technical: avgTechnical.toFixed(1),
             physical: avgPhysical.toFixed(1),
-            tactical: avgTactical.toFixed(1),
-            mental: avgMental.toFixed(1)
+            mental: avgMental.toFixed(1),
+            defensive: avgDefensive.toFixed(1)
           },
-          insights: `Based on current performance data, your team needs focus on ${avgTechnical < 70 ? 'technical skills' : avgPhysical < 70 ? 'physical conditioning' : avgTactical < 70 ? 'tactical awareness' : avgMental < 70 ? 'mental strength' : 'maintaining current form'}. The schedule balances training load with ${upcomingMatches.length} upcoming matches.`
+          insights: `Based on current performance data, your team needs focus on ${avgTechnical < 70 ? 'technical skills' : avgPhysical < 70 ? 'physical conditioning' : avgMental < 70 ? 'mental strength' : avgDefensive < 70 ? 'defensive organization' : 'maintaining current form'}. The schedule balances training load with ${upcomingMatches.length} upcoming matches.`
         };
       }),
   }),
@@ -6444,44 +6460,39 @@ Be practical and implementable. Consider recovery needs and match preparation.`;
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get all players data
         const playersData = await Promise.all(
-          input.playerIds.map(async (playerId) => {
-            const player = await db.select().from(players).where(eq(players.id, playerId)).limit(1);
+          input.playerIds.map(async (playerId: number) => {
+            const player = await database.select().from(players).where(eq(players.id, playerId)).limit(1);
             if (!player[0]) return null;
             
-            // Get latest skill scores
-            const skillScore = await db.select().from(skillScores)
-              .where(eq(skillScores.playerId, playerId))
-              .orderBy(desc(skillScores.createdAt))
-              .limit(1);
-            
             // Get recent performance stats
-            const stats = await db.select().from(playerSkillScores)
+            const stats = await database.select().from(playerSkillScores)
               .where(eq(playerSkillScores.playerId, playerId))
               .orderBy(desc(playerSkillScores.assessmentDate))
               .limit(1);
             
-            const avgTechnical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / stats.length : 0;
-            const avgPhysical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / stats.length : 0;
-            const avgTactical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / stats.length : 0;
-            const avgMental = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.mentalScore || 0), 0) / stats.length : 0;
+            const avgTechnical = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.technicalOverall || 0), 0) / stats.length : 0;
+            const avgPhysical = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.physicalOverall || 0), 0) / stats.length : 0;
+            const avgMental = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.mentalOverall || 0), 0) / stats.length : 0;
+            const avgDefensive = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.defensiveOverall || 0), 0) / stats.length : 0;
             
             return {
               id: player[0].id,
-              name: player[0].name,
+              name: `${player[0].firstName} ${player[0].lastName}`,
               position: player[0].position,
               technical: Math.round(avgTechnical),
               physical: Math.round(avgPhysical),
-              tactical: Math.round(avgTactical),
               mental: Math.round(avgMental),
-              skillScore: skillScore[0] || null
+              defensive: Math.round(avgDefensive)
             };
           })
         );
         
-        const validPlayers = playersData.filter(p => p !== null);
+        const validPlayers = playersData.filter((p): p is NonNullable<typeof p> => p !== null);
         
         if (validPlayers.length < 2) {
           throw new Error('Not enough valid players for comparison');
@@ -6492,13 +6503,13 @@ Be practical and implementable. Consider recovery needs and match preparation.`;
 
 Comparing ${validPlayers.length} players:
 
-${validPlayers.map((p, i) => `
+${validPlayers.map((p: typeof validPlayers[0], i: number) => `
 **Player ${i + 1}: ${p.name}**
 - Position: ${p.position}
 - Technical Score: ${p.technical}/100
 - Physical Score: ${p.physical}/100
-- Tactical Score: ${p.tactical}/100
-- Mental Score: ${p.mental}/100`).join('\n')}`;
+- Mental Score: ${p.mental}/100
+- Defensive Score: ${p.defensive}/100`).join('\n')}`;
         
         const systemPrompt = `You are an expert football scout and analyst. Compare these players and provide:
 
@@ -6530,10 +6541,10 @@ Be specific, data-driven, and tactical. Consider position compatibility and team
           analysis,
           formationSuggestions,
           stats: {
-            technical: validPlayers.map(p => p.technical),
-            physical: validPlayers.map(p => p.physical),
-            tactical: validPlayers.map(p => p.tactical),
-            mental: validPlayers.map(p => p.mental)
+            technical: validPlayers.map((p: typeof validPlayers[0]) => p.technical),
+            physical: validPlayers.map((p: typeof validPlayers[0]) => p.physical),
+            mental: validPlayers.map((p: typeof validPlayers[0]) => p.mental),
+            defensive: validPlayers.map((p: typeof validPlayers[0]) => p.defensive)
           }
         };
       }),
@@ -6548,22 +6559,24 @@ Be specific, data-driven, and tactical. Consider position compatibility and team
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         // Get team data
-        const team = await db.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
+        const team = await database.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
         if (!team[0]) {
           throw new Error('Team not found');
         }
         
         // Get team players
-        const teamPlayers = await db.select()
+        const teamPlayers = await database.select()
           .from(players)
           .where(eq(players.teamId, input.teamId));
         
         // Get recent performance stats
         const allStats = await Promise.all(
-          teamPlayers.map(async (player) => {
-            const stats = await db.select().from(playerSkillScores)
+          teamPlayers.map(async (player: typeof teamPlayers[0]) => {
+            const stats = await database.select().from(playerSkillScores)
               .where(eq(playerSkillScores.playerId, player.id))
               .orderBy(desc(playerSkillScores.assessmentDate))
               .limit(5);
@@ -6572,9 +6585,9 @@ Be specific, data-driven, and tactical. Consider position compatibility and team
         );
         
         // Get match data if specified
-        let matchData = null;
+        let matchData: typeof matches.$inferSelect | null = null;
         if (input.matchId) {
-          const match = await db.select().from(matches).where(eq(matches.id, input.matchId)).limit(1);
+          const match = await database.select().from(matches).where(eq(matches.id, input.matchId)).limit(1);
           if (match[0]) {
             matchData = match[0];
           }
@@ -6582,13 +6595,13 @@ Be specific, data-driven, and tactical. Consider position compatibility and team
         
         // Calculate team averages
         const flatStats = allStats.flatMap(p => p.stats);
-        const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / flatStats.length : 0;
-        const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / flatStats.length : 0;
-        const avgTactical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / flatStats.length : 0;
+        const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.technicalOverall || 0), 0) / flatStats.length : 0;
+        const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.physicalOverall || 0), 0) / flatStats.length : 0;
+        const avgMental = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.mentalOverall || 0), 0) / flatStats.length : 0;
         
         // Identify strengths and weaknesses
-        const strengths = [];
-        const weaknesses = [];
+        const strengths: string[] = [];
+        const weaknesses: string[] = [];
         
         if (avgTechnical > 75) strengths.push('Technical skills');
         else if (avgTechnical < 60) weaknesses.push('Technical skills');
@@ -6596,12 +6609,12 @@ Be specific, data-driven, and tactical. Consider position compatibility and team
         if (avgPhysical > 75) strengths.push('Physical conditioning');
         else if (avgPhysical < 60) weaknesses.push('Physical conditioning');
         
-        if (avgTactical > 75) strengths.push('Tactical awareness');
-        else if (avgTactical < 60) weaknesses.push('Tactical awareness');
+        if (avgMental > 75) strengths.push('Mental attributes');
+        else if (avgMental < 60) weaknesses.push('Mental attributes');
         
         // Get player positions distribution
         const positionCounts: Record<string, number> = {};
-        teamPlayers.forEach(p => {
+        teamPlayers.forEach((p: typeof teamPlayers[0]) => {
           const pos = p.position || 'Unknown';
           positionCounts[pos] = (positionCounts[pos] || 0) + 1;
         });
@@ -6615,13 +6628,13 @@ Total Players: ${teamPlayers.length}
 **Team Performance Metrics:**
 - Technical: ${avgTechnical.toFixed(1)}/100
 - Physical: ${avgPhysical.toFixed(1)}/100
-- Tactical: ${avgTactical.toFixed(1)}/100
+- Mental: ${avgMental.toFixed(1)}/100
 
 **Team Strengths:**
-${strengths.length > 0 ? strengths.map(s => `- ${s}`).join('\n') : '- Balanced team with no standout strengths'}
+${strengths.length > 0 ? strengths.map((s: string) => `- ${s}`).join('\n') : '- Balanced team with no standout strengths'}
 
 **Areas for Improvement:**
-${weaknesses.length > 0 ? weaknesses.map(w => `- ${w}`).join('\n') : '- Well-rounded team'}
+${weaknesses.length > 0 ? weaknesses.map((w: string) => `- ${w}`).join('\n') : '- Well-rounded team'}
 
 **Squad Composition:**
 ${Object.entries(positionCounts).map(([pos, count]) => `- ${pos}: ${count} players`).join('\n')}
@@ -6629,8 +6642,7 @@ ${Object.entries(positionCounts).map(([pos, count]) => `- ${pos}: ${count} playe
 ${matchData ? `**Match Context:**
 Opponent: ${matchData.opponent}
 Match Type: ${matchData.matchType || 'Unknown'}
-Result: ${matchData.result ? matchData.result.toUpperCase() : 'Pending'}
-Score: ${matchData.goalsFor || 0}-${matchData.goalsAgainst || 0}` : '**General tactical analysis (no specific match)**'}`;
+Result: ${matchData.result ? matchData.result.toUpperCase() : 'Pending'}` : '**General tactical analysis (no specific match)**'}`;
         
         const systemPrompt = `You are an expert football tactical analyst. Provide a comprehensive tactical analysis including:
 
@@ -6672,7 +6684,7 @@ Be specific, practical, and tactical. Focus on actionable insights.`;
           teamStats: {
             technical: avgTechnical.toFixed(1),
             physical: avgPhysical.toFixed(1),
-            tactical: avgTactical.toFixed(1)
+            mental: avgMental.toFixed(1)
           }
         };
       }),
@@ -6734,19 +6746,19 @@ Be specific, tactical, and actionable. Use football terminology appropriately.`;
         const formationMatch = fullAnalysis.match(/formation[s]?[:\s]+([^\n]+)/i);
         const formation = formationMatch ? formationMatch[1].trim() : '4-3-3';
         
-        const tacticalMatch = fullAnalysis.match(/tactical patterns?[:\s]+([^#]+?)(?=player movements?|passing patterns?|key moments?|recommendations?|$)/is);
+        const tacticalMatch = fullAnalysis.match(/tactical patterns?[:\s]+([^#]+?)(?=player movements?|passing patterns?|key moments?|recommendations?|$)/i);
         const tacticalPatterns = tacticalMatch ? tacticalMatch[1].trim() : '';
         
-        const movementsMatch = fullAnalysis.match(/player movements?[:\s]+([^#]+?)(?=passing patterns?|key moments?|recommendations?|$)/is);
+        const movementsMatch = fullAnalysis.match(/player movements?[:\s]+([^#]+?)(?=passing patterns?|key moments?|recommendations?|$)/i);
         const playerMovements = movementsMatch ? movementsMatch[1].trim() : '';
         
-        const passingMatch = fullAnalysis.match(/passing patterns?[:\s]+([^#]+?)(?=key moments?|recommendations?|$)/is);
+        const passingMatch = fullAnalysis.match(/passing patterns?[:\s]+([^#]+?)(?=key moments?|recommendations?|$)/i);
         const passingPatterns = passingMatch ? passingMatch[1].trim() : '';
         
-        const momentsMatch = fullAnalysis.match(/key moments?[:\s]+([^#]+?)(?=recommendations?|$)/is);
+        const momentsMatch = fullAnalysis.match(/key moments?[:\s]+([^#]+?)(?=recommendations?|$)/i);
         const keyMoments = momentsMatch ? momentsMatch[1].trim() : '';
         
-        const recsMatch = fullAnalysis.match(/recommendations?[:\s]+([^#]+?)$/is);
+        const recsMatch = fullAnalysis.match(/recommendations?[:\s]+([^#]+?)$/i);
         const recommendations = recsMatch ? recsMatch[1].trim() : '';
         
         return {
@@ -6772,6 +6784,8 @@ Be specific, tactical, and actionable. Use football terminology appropriately.`;
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
         
         let contextData = '';
         let entityName = '';
@@ -6779,17 +6793,17 @@ Be specific, tactical, and actionable. Use football terminology appropriately.`;
         if (input.type === 'team') {
           if (!input.teamId) throw new Error('Team ID required for team prediction');
           
-          const team = await db.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
+          const team = await database.select().from(teams).where(eq(teams.id, input.teamId)).limit(1);
           if (!team[0]) throw new Error('Team not found');
           entityName = team[0].name;
           
           // Get team players
-          const teamPlayers = await db.select().from(players).where(eq(players.teamId, input.teamId));
+          const teamPlayers = await database.select().from(players).where(eq(players.teamId, input.teamId));
           
           // Get recent performance stats
           const allStats = await Promise.all(
-            teamPlayers.map(async (player) => {
-              const stats = await db.select().from(playerSkillScores)
+            teamPlayers.map(async (player: typeof teamPlayers[0]) => {
+              const stats = await database.select().from(playerSkillScores)
                 .where(eq(playerSkillScores.playerId, player.id))
                 .orderBy(desc(playerSkillScores.assessmentDate))
                 .limit(10);
@@ -6798,21 +6812,21 @@ Be specific, tactical, and actionable. Use football terminology appropriately.`;
           );
           
           const flatStats = allStats.flat();
-          const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / flatStats.length : 0;
-          const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / flatStats.length : 0;
-          const avgTactical = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / flatStats.length : 0;
-          const avgMental = flatStats.length > 0 ? flatStats.reduce((sum, s) => sum + (s.mentalScore || 0), 0) / flatStats.length : 0;
+          const avgTechnical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.technicalOverall || 0), 0) / flatStats.length : 0;
+          const avgPhysical = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.physicalOverall || 0), 0) / flatStats.length : 0;
+          const avgMental = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.mentalOverall || 0), 0) / flatStats.length : 0;
+          const avgDefensive = flatStats.length > 0 ? flatStats.reduce((sum: number, s: typeof flatStats[0]) => sum + (s.defensiveOverall || 0), 0) / flatStats.length : 0;
           
           // Get recent matches
-          const recentMatches = await db.select()
+          const recentMatches = await database.select()
             .from(matches)
             .where(eq(matches.teamId, input.teamId))
             .orderBy(desc(matches.matchDate))
             .limit(10);
           
-          const wins = recentMatches.filter(m => m.result === 'win').length;
-          const losses = recentMatches.filter(m => m.result === 'loss').length;
-          const draws = recentMatches.filter(m => m.result === 'draw').length;
+          const wins = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'win').length;
+          const losses = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'loss').length;
+          const draws = recentMatches.filter((m: typeof recentMatches[0]) => m.result === 'draw').length;
           
           contextData = `**Team Performance Prediction Request**
 
@@ -6823,48 +6837,48 @@ Players: ${teamPlayers.length}
 **Current Performance Metrics:**
 - Technical: ${avgTechnical.toFixed(1)}/100
 - Physical: ${avgPhysical.toFixed(1)}/100
-- Tactical: ${avgTactical.toFixed(1)}/100
 - Mental: ${avgMental.toFixed(1)}/100
+- Defensive: ${avgDefensive.toFixed(1)}/100
 
 **Recent Form (Last 10 matches):**
 Wins: ${wins} | Draws: ${draws} | Losses: ${losses}
 Win Rate: ${recentMatches.length > 0 ? ((wins / recentMatches.length) * 100).toFixed(0) : 0}%
 
 **Recent Match Results:**
-${recentMatches.slice(0, 5).map((m, i) => `${i + 1}. ${m.result?.toUpperCase() || 'N/A'} ${m.goalsFor || 0}-${m.goalsAgainst || 0} vs ${m.opponent || 'Unknown'}`).join('\n')}`;
+${recentMatches.slice(0, 5).map((m: typeof recentMatches[0], i: number) => `${i + 1}. ${m.result?.toUpperCase() || 'N/A'} vs ${m.opponent || 'Unknown'}`).join('\n')}`;
           
         } else {
           if (!input.playerId) throw new Error('Player ID required for player prediction');
           
-          const player = await db.select().from(players).where(eq(players.id, input.playerId)).limit(1);
+          const player = await database.select().from(players).where(eq(players.id, input.playerId)).limit(1);
           if (!player[0]) throw new Error('Player not found');
-          entityName = player[0].name;
+          entityName = `${player[0].firstName} ${player[0].lastName}`;
           
           // Get player stats
-          const stats = await db.select().from(playerSkillScores)
+          const stats = await database.select().from(playerSkillScores)
             .where(eq(playerSkillScores.playerId, input.playerId))
             .orderBy(desc(playerSkillScores.assessmentDate))
             .limit(10);
           
-          const avgTechnical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.technicalScore || 0), 0) / stats.length : 0;
-          const avgPhysical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.physicalScore || 0), 0) / stats.length : 0;
-          const avgTactical = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.tacticalScore || 0), 0) / stats.length : 0;
-          const avgMental = stats.length > 0 ? stats.reduce((sum, s) => sum + (s.mentalScore || 0), 0) / stats.length : 0;
+          const avgTechnical = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.technicalOverall || 0), 0) / stats.length : 0;
+          const avgPhysical = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.physicalOverall || 0), 0) / stats.length : 0;
+          const avgMental = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.mentalOverall || 0), 0) / stats.length : 0;
+          const avgDefensive = stats.length > 0 ? stats.reduce((sum: number, s: typeof stats[0]) => sum + (s.defensiveOverall || 0), 0) / stats.length : 0;
           
           contextData = `**Player Performance Prediction Request**
 
-Player: ${player[0].name}
+Player: ${entityName}
 Position: ${player[0].position}
 Age: ${player[0].dateOfBirth ? new Date().getFullYear() - new Date(player[0].dateOfBirth).getFullYear() : 'Unknown'}
 
 **Recent Performance Metrics (Last 10 sessions):**
 - Technical: ${avgTechnical.toFixed(1)}/100
 - Physical: ${avgPhysical.toFixed(1)}/100
-- Tactical: ${avgTactical.toFixed(1)}/100
 - Mental: ${avgMental.toFixed(1)}/100
+- Defensive: ${avgDefensive.toFixed(1)}/100
 
 **Performance Trend:**
-${stats.slice(0, 5).map((s, i) => `Session ${i + 1}: Tech ${s.technicalScore || 0} | Phys ${s.physicalScore || 0} | Tact ${s.tacticalScore || 0} | Ment ${s.mentalScore || 0}`).join('\n')}`;
+${stats.slice(0, 5).map((s: typeof stats[0], i: number) => `Session ${i + 1}: Tech ${s.technicalOverall || 0} | Phys ${s.physicalOverall || 0} | Ment ${s.mentalOverall || 0}`).join('\n')}`;
         }
         
         const systemPrompt = `You are an expert sports performance analyst and data scientist. Analyze the historical performance data and predict future performance:
@@ -6906,16 +6920,16 @@ Be realistic, data-driven, and specific. Provide confidence levels for your pred
         const confidenceMatch = fullAnalysis.match(/confidence[:\s]+(\d+)/i);
         const confidence = confidenceMatch ? parseInt(confidenceMatch[1]) : 75;
         
-        const trendMatch = fullAnalysis.match(/performance trend[:\s]+([^#]+?)(?=key factors?|recommendations?|risk|$)/is);
+        const trendMatch = fullAnalysis.match(/performance trend[:\s]+([^#]+?)(?=key factors?|recommendations?|risk|$)/i);
         const trend = trendMatch ? trendMatch[1].trim() : '';
         
-        const factorsMatch = fullAnalysis.match(/key factors?[:\s]+([^#]+?)(?=recommendations?|risk|$)/is);
+        const factorsMatch = fullAnalysis.match(/key factors?[:\s]+([^#]+?)(?=recommendations?|risk|$)/i);
         const factors = factorsMatch ? factorsMatch[1].trim() : '';
         
-        const recsMatch = fullAnalysis.match(/recommendations?[:\s]+([^#]+?)(?=risk|$)/is);
+        const recsMatch = fullAnalysis.match(/recommendations?[:\s]+([^#]+?)(?=risk|$)/i);
         const recommendations = recsMatch ? recsMatch[1].trim() : '';
         
-        const risksMatch = fullAnalysis.match(/risk factors?[:\s]+([^#]+?)$/is);
+        const risksMatch = fullAnalysis.match(/risk factors?[:\s]+([^#]+?)$/i);
         const risks = risksMatch ? risksMatch[1].trim() : '';
         
         // Extract predicted metrics
@@ -7139,7 +7153,13 @@ Respond in JSON format:
 
         try {
           // Sync data using real PlayerMaker API
-          const result = await playermakerApi.syncPlayerMakerData(settings, {
+          const result = await playermakerApi.syncPlayerMakerData({
+            ...settings,
+            teamCode: settings.teamCode || undefined,
+            token: settings.token || undefined,
+            tokenExpiresOn: settings.tokenExpiresOn ? new Date(settings.tokenExpiresOn) : undefined,
+            clubName: settings.clubName || undefined
+          }, {
             sessionType: input.sessionType,
             daysBack: input.daysBack,
           });
@@ -7149,7 +7169,7 @@ Respond in JSON format:
             await db.savePlayermakerSession({
               sessionId: session.session_id,
               sessionType: session.session_type,
-              date: session.date,
+              date: new Date(session.date),
               phaseDuration: session.duration ? String(session.duration) : undefined,
               tag: session.notes || undefined,
             });
@@ -7163,15 +7183,12 @@ Respond in JSON format:
               playerName: metric.player_name,
               ageGroup: metric.age_group,
               totalTouches: metric.total_touches,
-              leftFootTouches: metric.left_foot_touches,
-              rightFootTouches: metric.right_foot_touches,
+              leftLegTouches: metric.left_foot_touches,
+              rightLegTouches: metric.right_foot_touches,
               distanceCovered: metric.distance_covered.toString(),
               topSpeed: metric.top_speed.toString(),
-              averageSpeed: metric.average_speed.toString(),
               sprintCount: metric.sprint_count,
-              accelerationCount: metric.acceleration_count,
-              decelerationCount: metric.deceleration_count,
-              highIntensityDistance: metric.high_intensity_distance.toString(),
+              hidCovered: metric.high_intensity_distance.toString(),
               createdAt: new Date(),
             });
           }
@@ -7180,7 +7197,7 @@ Respond in JSON format:
           await db.updatePlayermakerToken(
             result.token,
             result.tokenExpiresAt.getTime(),
-            settings.clubName
+            settings.clubName || undefined
           );
           await db.updatePlayermakerLastSync();
 
@@ -7196,8 +7213,8 @@ Respond in JSON format:
           await db.saveSyncHistory({
             syncType: 'manual',
             sessionType: input.sessionType,
-            startDate: input.startDate ? input.startDate.split('T')[0] : undefined,
-            endDate: input.endDate ? input.endDate.split('T')[0] : undefined,
+            startDate: input.startDate ? new Date(input.startDate) : null,
+            endDate: input.endDate ? new Date(input.endDate) : null,
             sessionsCount,
             metricsCount,
             success: syncSuccess,
@@ -7277,13 +7294,13 @@ Respond in JSON format:
           : metrics;
         
         // Calculate aggregated statistics
-        const avgDistance = filteredMetrics.reduce((sum, m) => sum + (Number(m.totalDistance) || 0), 0) / (filteredMetrics.length || 1);
+        const avgDistance = filteredMetrics.reduce((sum, m) => sum + (Number(m.distanceCovered) || 0), 0) / (filteredMetrics.length || 1);
         const avgTouches = filteredMetrics.reduce((sum, m) => sum + (Number(m.totalTouches) || 0), 0) / (filteredMetrics.length || 1);
         
         // Build history data for charts
         const distanceHistory = filteredMetrics.slice(-10).map(m => ({
           date: m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'N/A',
-          distance: Number(m.totalDistance) || 0
+          distance: Number(m.distanceCovered) || 0
         }));
         
         const touchesHistory = filteredMetrics.slice(-10).map(m => ({
@@ -7296,19 +7313,19 @@ Respond in JSON format:
         const sprintHistory = filteredMetrics.slice(-10).map(m => ({
           date: m.createdAt ? new Date(m.createdAt).toLocaleDateString() : 'N/A',
           topSpeed: Number(m.topSpeed) || 0,
-          sprints: Number(m.totalSprints) || 0
+          sprints: Number(m.sprintCount) || 0
         }));
         
         // Get team averages for comparison
         const allMetrics = await db.getPlayermakerPlayerMetrics();
-        const teamAvgDistance = allMetrics.reduce((sum, m) => sum + (Number(m.totalDistance) || 0), 0) / (allMetrics.length || 1);
+        const teamAvgDistance = allMetrics.reduce((sum, m) => sum + (Number(m.distanceCovered) || 0), 0) / (allMetrics.length || 1);
         const teamAvgTouches = allMetrics.reduce((sum, m) => sum + (Number(m.totalTouches) || 0), 0) / (allMetrics.length || 1);
-        const teamAvgSprints = allMetrics.reduce((sum, m) => sum + (Number(m.totalSprints) || 0), 0) / (allMetrics.length || 1);
+        const teamAvgSprints = allMetrics.reduce((sum, m) => sum + (Number(m.sprintCount) || 0), 0) / (allMetrics.length || 1);
         
         const teamComparison = [
           { name: 'Distance (km)', nameAr: 'المسافة (كم)', playerValue: avgDistance / 1000, teamAvg: teamAvgDistance / 1000 },
           { name: 'Touches', nameAr: 'اللمسات', playerValue: avgTouches, teamAvg: teamAvgTouches },
-          { name: 'Sprints', nameAr: 'الركضات', playerValue: filteredMetrics.reduce((sum, m) => sum + (Number(m.totalSprints) || 0), 0) / (filteredMetrics.length || 1), teamAvg: teamAvgSprints }
+          { name: 'Sprints', nameAr: 'الركضات', playerValue: filteredMetrics.reduce((sum, m) => sum + (Number(m.sprintCount) || 0), 0) / (filteredMetrics.length || 1), teamAvg: teamAvgSprints }
         ];
         
         return {
@@ -7596,7 +7613,7 @@ Respond in JSON format:
         await db.savePlayermakerSession({
           sessionId,
           sessionType: input.sessionType,
-          date: sessionDate.toISOString().split('T')[0],
+          date: sessionDate,
           phaseDuration: String(input.duration),
           tag: input.notes || `${input.intensity} intensity ${input.sessionType}`,
           intensity: input.intensity,
@@ -8345,7 +8362,8 @@ Return ONLY valid JSON array, no markdown formatting.`;
           ]
         });
 
-        const content = response.choices[0]?.message?.content || '[]';
+        const messageContent = response.choices[0]?.message?.content;
+        const content = typeof messageContent === 'string' ? messageContent : '[]';
         let keyframes;
         
         try {
@@ -8510,29 +8528,32 @@ Be specific and professional. Limit response to 300 words.`;
           .from(forumPosts)
           .leftJoin(users, eq(forumPosts.authorId, users.id));
         
+        // Build where conditions
+        const whereConditions = [];
         if (input.categoryId) {
-          query = query.where(eq(forumPosts.categoryId, input.categoryId));
+          whereConditions.push(eq(forumPosts.categoryId, input.categoryId));
         }
-        
         if (input.search) {
-          query = query.where(
+          whereConditions.push(
             or(
               like(forumPosts.title, `%${input.search}%`),
               like(forumPosts.content, `%${input.search}%`)
             )
           );
         }
-        
-        if (input.sortBy === 'popular') {
-          query = query.orderBy(desc(forumPosts.upvotes));
-        } else if (input.sortBy === 'unanswered') {
-          query = query.where(eq(forumPosts.hasAcceptedAnswer, false));
-          query = query.orderBy(desc(forumPosts.createdAt));
-        } else {
-          query = query.orderBy(desc(forumPosts.createdAt));
+        if (input.sortBy === 'unanswered') {
+          whereConditions.push(eq(forumPosts.hasAcceptedAnswer, false));
         }
         
-        const posts = await query.limit(50);
+        // Build complete query with where and orderBy in one chain
+        const orderByClause = input.sortBy === 'popular' 
+          ? desc(forumPosts.upvotes)
+          : desc(forumPosts.createdAt);
+        
+        const posts = whereConditions.length > 0
+          ? await query.where(and(...whereConditions)).orderBy(orderByClause).limit(50)
+          : await query.orderBy(orderByClause).limit(50);
+        
         return posts;
       }),
     
@@ -9560,10 +9581,10 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
           name: users.name,
           email: users.email,
           avatarUrl: users.avatarUrl,
-          specialty: coachProfiles.specialty,
+          specialization: coachProfiles.specialization,
           bio: coachProfiles.bio,
           yearsExperience: coachProfiles.yearsExperience,
-          certifications: coachProfiles.certifications,
+          qualifications: coachProfiles.qualifications,
         })
         .from(users)
         .innerJoin(coachProfiles, eq(users.id, coachProfiles.userId))
@@ -9578,21 +9599,29 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
     create: protectedProcedure
       .input(z.object({
         coachId: z.number(),
+        playerId: z.number(),
         sessionDate: z.string(),
-        duration: z.number(),
-        sessionType: z.string(),
+        startTime: z.string(), // "09:00" format
+        endTime: z.string(), // "10:00" format
         notes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const database = await getDb();
         if (!database) throw new Error('Database not available');
-        const totalPrice = input.duration === 60 ? 300 : input.duration === 90 ? 400 : 200;
+        
+        // Calculate duration in minutes
+        const [startH, startM] = input.startTime.split(':').map(Number);
+        const [endH, endM] = input.endTime.split(':').map(Number);
+        const duration = (endH * 60 + endM) - (startH * 60 + startM);
+        const totalPrice = duration === 60 ? 300 : duration === 90 ? 400 : 200;
+        
         await database.insert(privateTrainingBookings).values({
-          userId: ctx.user.id,
+          bookedBy: ctx.user.id,
           coachId: input.coachId,
+          playerId: input.playerId,
           sessionDate: new Date(input.sessionDate),
-          duration: input.duration,
-          sessionType: input.sessionType,
+          startTime: input.startTime,
+          endTime: input.endTime,
           notes: input.notes || null,
           status: 'pending',
           totalPrice: totalPrice,
@@ -9610,8 +9639,8 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
             userName: ctx.user.name || 'Student',
             coachName: coach?.name || 'Coach',
             sessionDate: input.sessionDate,
-            duration: input.duration,
-            sessionType: input.sessionType,
+            duration: duration,
+            sessionType: 'Private Training',
             totalPrice: totalPrice,
           });
         }
@@ -9621,8 +9650,8 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
             coachName: coach.name || 'Coach',
             userName: ctx.user.name || 'Student',
             sessionDate: input.sessionDate,
-            duration: input.duration,
-            sessionType: input.sessionType,
+            duration: duration,
+            sessionType: 'Private Training',
             notes: input.notes,
           });
         }
@@ -9633,8 +9662,8 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
             userName: ctx.user.name || 'Student',
             coachName: coach?.name || 'Coach',
             sessionDate: input.sessionDate,
-            duration: input.duration,
-            sessionType: input.sessionType,
+            duration: duration,
+            sessionType: 'Private Training',
           });
         }
         
@@ -9649,8 +9678,8 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
             coachName: coach?.name || 'Coach',
             userName: ctx.user.name || 'Student',
             sessionDate: input.sessionDate,
-            duration: input.duration,
-            sessionType: input.sessionType,
+            duration: duration,
+            sessionType: 'Private Training',
           });
         }
         
@@ -9663,11 +9692,12 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
       const result = await database
         .select({
           id: privateTrainingBookings.id,
-          userId: privateTrainingBookings.userId,
+          bookedBy: privateTrainingBookings.bookedBy,
           coachId: privateTrainingBookings.coachId,
+          playerId: privateTrainingBookings.playerId,
           sessionDate: privateTrainingBookings.sessionDate,
-          duration: privateTrainingBookings.duration,
-          sessionType: privateTrainingBookings.sessionType,
+          startTime: privateTrainingBookings.startTime,
+          endTime: privateTrainingBookings.endTime,
           notes: privateTrainingBookings.notes,
           status: privateTrainingBookings.status,
           totalPrice: privateTrainingBookings.totalPrice,
@@ -9677,7 +9707,7 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
         })
         .from(privateTrainingBookings)
         .innerJoin(users, eq(privateTrainingBookings.coachId, users.id))
-        .where(eq(privateTrainingBookings.userId, ctx.user.id))
+        .where(eq(privateTrainingBookings.bookedBy, ctx.user.id))
         .orderBy(desc(privateTrainingBookings.sessionDate));
       return result;
     }),
@@ -9692,7 +9722,7 @@ Be specific, analytical, and constructive. Use data to support your analysis.`;
           .set({ status: 'cancelled' })
           .where(and(
             eq(privateTrainingBookings.id, input.id),
-            eq(privateTrainingBookings.userId, ctx.user.id)
+            eq(privateTrainingBookings.bookedBy, ctx.user.id)
           ));
         return { success: true };
       }),

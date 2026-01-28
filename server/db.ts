@@ -295,9 +295,9 @@ export async function getPlayerById(id: number) {
 
 export async function getPlayerByUserId(userId: number) {
   const db = await getDb();
-  if (!db) return undefined;
+  if (!db) return null;
   const result = await db.select().from(players).where(eq(players.userId, userId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  return result.length > 0 ? result[0] : null;
 }
 
 export async function getAllPlayers() {
@@ -806,6 +806,18 @@ export async function getParentPlayerRelations(parentUserId: number) {
   if (!db) return [];
   return db.select().from(parentPlayerRelations)
     .where(eq(parentPlayerRelations.parentUserId, parentUserId));
+}
+
+export async function checkParentPlayerAccess(parentUserId: number, playerId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db.select().from(parentPlayerRelations)
+    .where(and(
+      eq(parentPlayerRelations.parentUserId, parentUserId),
+      eq(parentPlayerRelations.playerId, playerId)
+    ))
+    .limit(1);
+  return result.length > 0;
 }
 
 // ==================== ANALYTICS FUNCTIONS ====================
@@ -3340,6 +3352,18 @@ export async function getAcademyVideosByCategory(category: string): Promise<Acad
   
   return db.select().from(academyVideos)
     .where(and(eq(academyVideos.category, category as any), eq(academyVideos.isActive, true)))
+    .orderBy(academyVideos.displayOrder, desc(academyVideos.createdAt));
+}
+
+export async function getAllGalleryVideos(): Promise<AcademyVideo[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return db.select().from(academyVideos)
+    .where(and(
+      sql`${academyVideos.category} LIKE 'gallery%'`,
+      eq(academyVideos.isActive, true)
+    ))
     .orderBy(academyVideos.displayOrder, desc(academyVideos.createdAt));
 }
 

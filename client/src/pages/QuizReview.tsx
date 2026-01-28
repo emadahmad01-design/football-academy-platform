@@ -87,6 +87,11 @@ export default function QuizReview() {
               ? JSON.parse(question.options) 
               : question.options;
 
+            // Skip if options are invalid
+            if (!options || !Array.isArray(options)) {
+              return null;
+            }
+
             return (
               <div
                 key={question.id}
