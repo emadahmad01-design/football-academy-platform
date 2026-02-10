@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,6 +31,7 @@ interface MatchTimer {
 export default function LiveMatchMode() {
   const { t } = useLanguage();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
   const [liveMatchId, setLiveMatchId] = useState<number | null>(null);
   const [timer, setTimer] = useState<MatchTimer>({ isRunning: false, currentMinute: 0, startTime: null });
   const [showStartDialog, setShowStartDialog] = useState(false);
@@ -213,6 +215,35 @@ export default function LiveMatchMode() {
   };
 
   const formations = ['4-3-3', '4-4-2', '3-5-2', '4-2-3-1', '3-4-3', '5-3-2'];
+
+  // Auth loading state
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Not authenticated
+  if (!user) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-2xl mx-auto">
+          <Card className="p-8 text-center">
+            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-destructive" />
+            <h1 className="text-2xl font-bold mb-2">{t('authRequired') || 'Authentication Required'}</h1>
+            <p className="text-muted-foreground mb-4">{t('pleaseLogin') || 'Please log in to access Live Match Mode'}</p>
+            <Button onClick={() => window.location.href = '/login'}>
+              {t('login') || 'Log In'}
+            </Button>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!liveMatchId) {
     return (

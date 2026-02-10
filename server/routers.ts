@@ -3677,31 +3677,55 @@ export const appRouter = router({
     saveTacticalBoard: protectedProcedure
       .input(z.object({
         name: z.string(),
-        homeFormation: z.string(),
-        awayFormation: z.string(),
-        homePlayers: z.string(), // JSON
-        awayPlayers: z.string(), // JSON
+        formation: z.string(),
+        players: z.string(), // JSON
         drawings: z.string().optional(), // JSON
         teamId: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const positions = JSON.stringify({
-          homeFormation: input.homeFormation,
-          awayFormation: input.awayFormation,
-          homePlayers: JSON.parse(input.homePlayers),
-          awayPlayers: JSON.parse(input.awayPlayers),
-          drawings: input.drawings ? JSON.parse(input.drawings) : []
-        });
-        
-        return db.createFormation({
+        return db.createTacticalBoard({
           name: input.name,
-          templateName: `${input.homeFormation} vs ${input.awayFormation}`,
-          description: `Tactical board setup`,
-          positions,
+          formation: input.formation,
+          players: input.players,
+          drawings: input.drawings || '[]',
           teamId: input.teamId,
           createdBy: ctx.user.id,
-          isTemplate: false,
         });
+      }),
+
+    // Get tactical boards
+    getTacticalBoards: protectedProcedure
+      .query(async () => {
+        return db.getAllTacticalBoards();
+      }),
+
+    // Get tactical board by ID
+    getTacticalBoard: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return db.getTacticalBoardById(input.id);
+      }),
+
+    // Update tactical board
+    updateTacticalBoard: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        formation: z.string().optional(),
+        players: z.string().optional(),
+        drawings: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateTacticalBoard(id, data);
+      }),
+
+    // Delete tactical board
+    deleteTacticalBoard: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteTacticalBoard(input.id);
+        return { success: true };
       }),
 
     // Create set piece

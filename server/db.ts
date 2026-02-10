@@ -62,6 +62,7 @@ import {
   videoAnnotations, InsertVideoAnnotation, VideoAnnotation,
   playerHeatmaps, InsertPlayerHeatmap, PlayerHeatmap,
   formations, InsertFormation, Formation,
+  tacticalBoards, InsertTacticalBoard, TacticalBoard,
   setPieces, InsertSetPiece, SetPiece,
   oppositionAnalysis, InsertOppositionAnalysis, OppositionAnalysis,
   matchBriefings, InsertMatchBriefing, MatchBriefing,
@@ -3253,6 +3254,59 @@ export async function getUserFormations(userId: number): Promise<Formation[]> {
   // Return all formations (available to all teams)
   return db.select().from(formations)
     .orderBy(desc(formations.createdAt));
+}
+
+// ==================== TACTICAL BOARDS ====================
+
+export async function createTacticalBoard(data: InsertTacticalBoard): Promise<TacticalBoard> {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  const result = await db.insert(tacticalBoards).values(data);
+  const insertId = result[0].insertId;
+  const [tacticalBoard] = await db.select().from(tacticalBoards).where(eq(tacticalBoards.id, insertId));
+  return tacticalBoard;
+}
+
+export async function getTacticalBoardById(id: number): Promise<TacticalBoard | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [tacticalBoard] = await db.select().from(tacticalBoards).where(eq(tacticalBoards.id, id));
+  return tacticalBoard;
+}
+
+export async function getTacticalBoardsByTeam(teamId: number): Promise<TacticalBoard[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(tacticalBoards).where(eq(tacticalBoards.teamId, teamId)).orderBy(desc(tacticalBoards.createdAt));
+}
+
+export async function getUserTacticalBoards(userId: number): Promise<TacticalBoard[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(tacticalBoards)
+    .where(eq(tacticalBoards.createdBy, userId))
+    .orderBy(desc(tacticalBoards.createdAt));
+}
+
+export async function getAllTacticalBoards(): Promise<TacticalBoard[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(tacticalBoards)
+    .orderBy(tacticalBoards.name);
+}
+
+export async function updateTacticalBoard(id: number, data: Partial<InsertTacticalBoard>): Promise<TacticalBoard | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  await db.update(tacticalBoards).set(data).where(eq(tacticalBoards.id, id));
+  const [tacticalBoard] = await db.select().from(tacticalBoards).where(eq(tacticalBoards.id, id));
+  return tacticalBoard;
+}
+
+export async function deleteTacticalBoard(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(tacticalBoards).where(eq(tacticalBoards.id, id));
 }
 
 // ==================== SET PIECES ====================

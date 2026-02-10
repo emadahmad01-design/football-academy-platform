@@ -240,49 +240,34 @@ export default function ProfessionalTacticalBoard() {
   const [formationName, setFormationName] = useState('');
   const [showManageDialog, setShowManageDialog] = useState(false);
   const [saveForTeam, setSaveForTeam] = useState<'blue' | 'red'>('blue');
-  const isLoadingFormationRef = useRef(false);
   const [homeFormationValue, setHomeFormationValue] = useState<string>('4-3-3');
   const [awayFormationValue, setAwayFormationValue] = useState<string>('4-4-2');
 
   const { data: teams } = trpc.teams.getAll.useQuery();
-  const { data: userFormations, refetch: refetchFormations } = trpc.tactics.getUserFormations.useQuery();
+  const { data: userFormations, refetch: refetchFormations } = trpc.tactics.getTacticalBoards.useQuery();
   const saveTacticalBoard = trpc.tactics.saveTacticalBoard.useMutation();
-  const deleteFormationMutation = trpc.tactics.deleteFormation.useMutation();
+  const deleteFormationMutation = trpc.tactics.deleteTacticalBoard.useMutation();
 
   const CANVAS_WIDTH = 1200;
   const CANVAS_HEIGHT = 800;
   const PLAYER_RADIUS = 20;
 
-  // Initialize players
-  useEffect(() => {
-    if (!isLoadingFormationRef.current) {
-      setHomePlayers(getFormationPositions(homeFormation, 'home'));
-    }
-  }, [homeFormation]);
-
-  useEffect(() => {
-    if (!isLoadingFormationRef.current) {
-      setAwayPlayers(getFormationPositions(awayFormation, 'away'));
-    }
-  }, [awayFormation]);
-
   // Update saved formations when data loads
   useEffect(() => {
-    console.log('userFormations from query:', userFormations);
     if (userFormations && Array.isArray(userFormations)) {
       setSavedFormations(userFormations);
-      console.log('Set savedFormations to:', userFormations.length, 'items');
       
-      // Set initial dropdown values to match the saved formations
-      // Find the saved formation that matches the initial home formation
-      const homeMatch = userFormations.find(f => f.name === homeFormation);
+      // Load initial formations
+      const homeMatch = userFormations.find(f => f.formation === homeFormation);
       if (homeMatch) {
-        setHomeFormationValue(`saved:${homeMatch.id}`);
+        setHomeFormationValue(String(homeMatch.id));
+        loadFormation(homeMatch, 'home');
       }
       
-      const awayMatch = userFormations.find(f => f.name === awayFormation);
+      const awayMatch = userFormations.find(f => f.formation === awayFormation);
       if (awayMatch) {
-        setAwayFormationValue(`saved:${awayMatch.id}`);
+        setAwayFormationValue(String(awayMatch.id));
+        loadFormation(awayMatch, 'away');
       }
     }
   }, [userFormations]);
@@ -590,8 +575,11 @@ export default function ProfessionalTacticalBoard() {
   };
 
   const resetBoard = () => {
-    setHomePlayers(getFormationPositions(homeFormation, 'home'));
-    setAwayPlayers(getFormationPositions(awayFormation, 'away'));
+    // Reload players from the currently selected saved formations
+    const homeFormationObj = savedFormations.find(f => String(f.id) === homeFormationValue);
+    const awayFormationObj = savedFormations.find(f => String(f.id) === awayFormationValue);
+    if (homeFormationObj) loadFormation(homeFormationObj, 'home');
+    if (awayFormationObj) loadFormation(awayFormationObj, 'away');
     setDrawings([]);
     setSelectedPlayer(null);
     toast.success("Board reset!");
@@ -613,11 +601,9 @@ export default function ProfessionalTacticalBoard() {
       
       const result = await saveTacticalBoard.mutateAsync({
         name: formationName,
-        homeFormation: saveForTeam === 'blue' ? homeFormation : awayFormation,
-        awayFormation: '', // Not needed for single team save
-        homePlayers: JSON.stringify(saveForTeam === 'blue' ? homePlayers : awayPlayers),
-        awayPlayers: JSON.stringify([]), // Not needed for single team save
-        drawings: JSON.stringify([]), // Clear drawings for single team
+        formation: saveForTeam === 'blue' ? homeFormation : awayFormation,
+        players: JSON.stringify(saveForTeam === 'blue' ? homePlayers : awayPlayers),
+        drawings: JSON.stringify([]),
         teamId: undefined,
       });
 
@@ -643,26 +629,13 @@ export default function ProfessionalTacticalBoard() {
 
   // Handle formation selection from dropdown
   const handleFormationSelect = (value: string, team: 'home' | 'away') => {
-    // Check if it's a saved formation
-    if (value.startsWith('saved:')) {
-      const formationId = parseInt(value.replace('saved:', ''));
-      const formation = savedFormations.find(f => f.id === formationId);
-      if (formation) {
-        loadFormation(formation, team);
-        // Update the dropdown value to show the selection
-        if (team === 'home') {
-          setHomeFormationValue(value);
-        } else {
-          setAwayFormationValue(value);
-        }
-      }
-    } else {
-      // It's a preset formation
+    const formationId = parseInt(value);
+    const formation = savedFormations.find(f => f.id === formationId);
+    if (formation) {
+      loadFormation(formation, team);
       if (team === 'home') {
-        setHomeFormation(value as Formation);
         setHomeFormationValue(value);
       } else {
-        setAwayFormation(value as Formation);
         setAwayFormationValue(value);
       }
     }
@@ -672,68 +645,42 @@ export default function ProfessionalTacticalBoard() {
     try {
       console.log('Loading formation:', formation, 'for team:', team);
       
-      // Check if positions is valid JSON with data
-      let positions;
-      try {
-        positions = JSON.parse(formation.positions);
-      } catch (e) {
-        positions = null;
-      }
-      
-      console.log('Parsed positions:', positions);
-      
-      // Check if it's a new format formation with player positions
-      if (positions && positions.homePlayers) {
-        // Set loading flag BEFORE any state updates - using ref for synchronous behavior
-        isLoadingFormationRef.current = true;
+      if (formation.players) {
+        // Parse the JSON string
+        const players = typeof formation.players === 'string' 
+          ? JSON.parse(formation.players) 
+          : formation.players;
         
-        // Check if formation needs to be mirrored based on average x position
-        const avgX = positions.homePlayers.reduce((sum: number, p: any) => sum + p.x, 0) / positions.homePlayers.length;
-        const isRightSide = avgX > CANVAS_WIDTH / 2; // Formation is on right side (red team)
-        
-        // Ensure all players have required properties with unique IDs
-        const enrichPlayers = (players: any[], teamType: 'home' | 'away') => 
-          players.map((p: any, idx: number) => ({
+        // Enrich players with proper IDs and team
+        const enrichPlayers = (playersList: any[], teamType: 'home' | 'away') => 
+          playersList.map((p: any, idx: number) => ({
             ...p,
-            id: `${teamType}-${idx}`, // Always generate new ID based on target team
+            id: `${teamType}-${idx}`,
             number: p.number || idx + 1,
             team: teamType,
           }));
         
         if (team === 'home') {
-          // Apply to Blue (home) team
-          setHomeFormation(positions.homeFormation as Formation);
-          let players = enrichPlayers(positions.homePlayers, 'home');
-          // If formation was saved from right side, mirror it to left side
-          if (isRightSide) {
-            players = mirrorPositions(players);
-          }
-          setHomePlayers(players);
+          // Home team: use positions as-is (already on the left side)
+          setHomeFormation(formation.formation as Formation);
+          setHomePlayers(enrichPlayers(players, 'home'));
         } else {
-          // Apply to Red (away) team
-          setAwayFormation(positions.homeFormation as Formation);
-          let players = enrichPlayers(positions.homePlayers, 'away');
-          // If formation was saved from left side, mirror it to right side
-          if (!isRightSide) {
-            players = mirrorPositions(players);
-          }
-          setAwayPlayers(players);
+          // Away team: mirror positions across center line (to the right side)
+          setAwayFormation(formation.formation as Formation);
+          const mirroredPlayers = enrichPlayers(players, 'away').map(p => ({
+            ...p,
+            x: CANVAS_WIDTH - p.x, // Mirror across center line
+          }));
+          setAwayPlayers(mirroredPlayers);
         }
-        
-        // Reset flag after React has processed the updates
-        setTimeout(() => {
-          isLoadingFormationRef.current = false;
-        }, 100);
         
         toast.success(`Formation "${formation.name}" loaded!`);
       } else {
-        // Old format - just use the template name as the formation
         toast.error("This formation doesn't have saved player positions. Please save a new formation.");
       }
     } catch (error) {
       toast.error("Failed to load formation");
       console.error('Load formation error:', error);
-      isLoadingFormationRef.current = false;
     }
   };
 
@@ -789,8 +736,8 @@ export default function ProfessionalTacticalBoard() {
                   </SelectTrigger>
                   <SelectContent>
                     {savedFormations.map((f) => (
-                      <SelectItem key={`saved-home-${f.id}`} value={`saved:${f.id}`}>
-                        {f.name}
+                      <SelectItem key={`home-${f.id}`} value={String(f.id)}>
+                        {f.formation || f.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -805,8 +752,8 @@ export default function ProfessionalTacticalBoard() {
                   </SelectTrigger>
                   <SelectContent>
                     {savedFormations.map((f) => (
-                      <SelectItem key={`saved-away-${f.id}`} value={`saved:${f.id}`}>
-                        {f.name}
+                      <SelectItem key={`away-${f.id}`} value={String(f.id)}>
+                        {f.formation || f.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

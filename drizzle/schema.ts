@@ -1381,6 +1381,21 @@ export const formations = mysqlTable("formations", {
 export type Formation = typeof formations.$inferSelect;
 export type InsertFormation = typeof formations.$inferInsert;
 
+export const tacticalBoards = mysqlTable("tactical_boards", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  formation: varchar("formation", { length: 20 }).notNull(), // e.g., "4-3-3"
+  players: text("players").notNull(), // JSON array of player positions (always for home/left side)
+  drawings: text("drawings").notNull(), // JSON array of drawing elements (arrows, circles, etc)
+  teamId: int("teamId").references(() => teams.id),
+  createdBy: int("createdBy").references(() => users.id).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TacticalBoard = typeof tacticalBoards.$inferSelect;
+export type InsertTacticalBoard = typeof tacticalBoards.$inferInsert;
+
 export const setPieces = mysqlTable("set_pieces", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
